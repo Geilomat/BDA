@@ -23,8 +23,14 @@ rank([C;C*Ad;C*Ad*Ad])
 %p = 950*(1./(1+exp(-0.006*950.*Time1)*(950./1-1)))
 
 %%  Flugbahn:
-Time = 0:0.001:30;
-p = [sin(Time)];
+%Time = 0:0.001:30;
+load('StateFromHassan.mat');
+load('TimeFromHassan.mat');
+
+p = state(:,3);%[sin(Time)];
+p =  p';
+Time = t';
+T =  Time(length(Time))/length(Time);
 %p = [2200*(1./(1+exp(-0.000999*2200.*Time1)*(2200./1-1))) 3000*sin(Time2/(20/pi)) 3000*sin(Time3/(20/pi))];
 %a = [zeros(1,200),ones(1,100)*10*g,zeros(1,100),ones(1,500)*-g];
 %p = cumtrapz(cumtrapz(a)*T)*T;
@@ -48,8 +54,8 @@ plot(p,'b') %%Original bahn
 hold on;
 
 
-pnoise = awgn(p,10,'measured');
-anoise = awgn(a,20,'measured');
+pnoise = p;awgn(p,0.01,'measured');
+anoise = a;awgn(a,0.01,'measured');
 plot(pnoise,'g');
 plot(a,'r');
 plot(anoise,'y');
