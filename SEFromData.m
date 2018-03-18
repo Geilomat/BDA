@@ -61,14 +61,23 @@ for k =  1:(length(h)/round(GPSTau/Tau))
 end
 
 % get Barometric Data (pressure)
+% Pressure Data Temp/Po are just assumptions !!!!
 
+g = 9.81;
+m = 0.029; %Mass of average air
+k = 1.3806503e-23;   %Bolzman const
+R = 8.314472;    %Gas const
+Po = 1013.25;    %Pressure at altitude 0
+T = 15 + 273.15;    %Temperature in Kelvin
+p1_mes = Po*exp(-(m*g*h)./(k*T));
 
 
 plot(h,'b');
 hold on;
 plot(h_mes_GPS)
 plot(a,'r');
-legend('Real height in z','GPS heigt in z','Real Acceloration');
+plot(p1_mes);
+legend('Real height in z','GPS heigt in z','Real Acceloration','Pressure');
 hold off;
 
 %% Add noise to sensor data
