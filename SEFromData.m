@@ -29,6 +29,9 @@ Ad = expm(A*Tau);
 Gd = Ad * G;
 Bd = Ad * B;
 
+% Dummy vairable for Simualation
+simin = zeros(1,length(TimeVec));
+
 
 %% Observability test;
 rank([C;C*Ad;C*Ad*Ad])
@@ -108,7 +111,7 @@ sim('RocketSE');
 %% State estiamation loop
 
 % NoiseMatices
-R = [0 0 0 0 0;0 0 0 0 0;0 0 0 0 0;0 0 0 0 0;0 0 0 0 0];  %Sensor noise
+R = [1 0 0 0 0;0 12 0 0 0;0 0 15 0 0;0 0 0 1 0;0 0 0 0 1];  %Sensor noise
 Q = [0;0;1;1;0;1];            %System noise
 
 % Initialize
