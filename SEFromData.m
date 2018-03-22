@@ -66,6 +66,8 @@ for k =  1:(length(h)/round(GPSTau/Tau))
    end
 end
 
+h_GPS = [h_GPS ones(1,20)*h_GPS(end)];
+
 % Get a Temperatur vector with dicreasing Tempratur depending on height
 T0 = 15 + 273.15;
 T = T0 - 0.00649*h;
@@ -89,11 +91,11 @@ hold off;
 
 %% Add noise to sensor data
 
-T_mes = awgn(T,100,'measured');
-h_mes_GPS = awgn(h_GPS,200,'measured');
-p_mes_1 = awgn(p,10,'measured');
-p_mes_2 = awgn(p,20,'measured');
-a_mes = awgn(a,30,'measured');
+T_mes = awgn(T,80,'measured');
+h_mes_GPS = awgn(h_GPS,100,'measured');
+p_mes_1 = awgn(p,20,'measured');
+p_mes_2 = awgn(p,25,'measured');
+a_mes = awgn(a,80,'measured');
 
 figure('Name','Noise Data');
 hold on;
@@ -104,21 +106,48 @@ plot(a_mes);
 plot(T_mes);
 legend('GPS','Pressure 1','Pressure 2','Acceloration Measured','Temperatur');
 hold off;
-%% Excecute Simulation
 
-sim('RocketSE');
+%% State estiamation initialize
 
-%% State estiamation loop
-
-% NoiseMatices
-R = [1 0 0 0 0;0 12 0 0 0;0 0 15 0 0;0 0 0 1 0;0 0 0 0 1];  %Sensor noise
-Q = [0;0;1;1;0;1];            %System noise
+% NoiseMatrices
+%Sensor noise
+GPS = 2;
+ACL = 0.1;
+BM1 = 5;
+BM2 = 3;
+TRM = 0.01;
+R = diag([GPS ACL BM1 BM2 TRM]);
+%Static System noise:
+HGT = 0;
+SPE = 0;
+ACEL = 100;
+PRE = 0.1;
+TMP = 0;
+DTMP = 0.1;
+Q = [HGT;SPE;ACEL;PRE;TMP;DTMP];           
+%Dynamic Sytem noise:
+HGT = ones(1,length(TimeVec))*0.1;
+SPE = ones(1,length(TimeVec))*0.1;
+ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
+PRE = ones(1,length(TimeVec))*0.1;
+TMP = ones(1,length(TimeVec))*0;
+DTMP = ones(1,length(TimeVec))*0.1;
+Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
+Q_dyn_t = timeseries(Q_dyn,TimeVec);
 
 % Initialize
 u = zeros(1,length(TimeVec));   %Input vector is zero
-y = [0;0;0;0;0];                %Output are the measurements
-x = [0;0;0];                    %Is reality
-P = [1 0 0;0 1 0;0 0 1];
+y = [h_mes_GPS;a_mes;p_mes_Q1;p_mes_2;T_mes];                %Output are the measurements
+y_t = timeseries(y,TimeVec);
+x = [0;0;0;Po;T(1);0];                    %Is reality
+P0 = eye(6);
+
+%% Excecute Simulation Static
+
+sim('RocketSE');
+
+%% Excecute Simulation Unscentend
+
 
 
 %% Loop
@@ -135,3 +164,16 @@ for k = 1:length(TimeVec)
 end
 
 %% Plot
+
+figure('Name','Real flight vs estimation');
+plot(TimeVec,h);
+hold on;
+grid on;
+plot(X_estimatd.time,X_estimatd.signals.values(:,1));
+plot(TimeVec,a)
+plot(X_estimatd.time,X_estimatd.signals.values(:,3));
+plot(TimeVec,p)
+plot(X_estimatd.time,X_estimatd.signals.values(:,4));
+legend('real Height','estiamted Height','real acceloration','estimated acceloration','real pressure','estimated pressure');
+ylabel('height & accelaration');
+xlabel('Time [s]');
