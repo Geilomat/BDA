@@ -59,6 +59,7 @@ a = [a 0 0];
 % get height of GPS by deleting engouh values so it becomes 5Hz sample rate
 % and then ad Zero Order Hold to get static value
 GPSTau = 1/5;
+h_GPS = zeros(1, length(TimeVec)-20);
 
 for k =  1:(length(h)/round(GPSTau/Tau))
     for t =  1:round(GPSTau/Tau)
@@ -80,12 +81,12 @@ p = Po*(1-(0.0065*h)./T).^5.255;
 
 
 
-plot(h);
+plot(TimeVec,h);
 hold on;
-plot(h_GPS)
-plot(a);
-plot(T)
-plot(p);
+plot(TimeVec,h_GPS)
+plot(TimeVec,a);
+plot(TimeVec,T)
+plot(TimeVec,p);
 legend('Real height in z','GPS heigt in z','Real Acceloration','Assumed Temperature in Kelvin','Assumed Pressure');
 hold off;
 
@@ -93,8 +94,8 @@ hold off;
 
 T_mes = awgn(T,80,'measured');
 h_mes_GPS = awgn(h_GPS,100,'measured');
-p_mes_1 = awgn(p,20,'measured');
-p_mes_2 = awgn(p,25,'measured');
+p_mes_1 = awgn(p,35,'measured');
+p_mes_2 = awgn(p,40,'measured');
 a_mes = awgn(a,80,'measured');
 
 figure('Name','Noise Data');
@@ -137,7 +138,7 @@ Q_dyn_t = timeseries(Q_dyn,TimeVec);
 
 % Initialize
 u = zeros(1,length(TimeVec));   %Input vector is zero
-y = [h_mes_GPS;a_mes;p_mes_Q1;p_mes_2;T_mes];                %Output are the measurements
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];                %Output are the measurements
 y_t = timeseries(y,TimeVec);
 x = [0;0;0;Po;T(1);0];                    %Is reality
 P0 = eye(6);
