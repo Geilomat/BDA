@@ -112,61 +112,65 @@ hold off;
 
 % NoiseMatrices
 %Sensor noise
-GPS = 2;
+GPS = 1;
 ACL = 0.1;
 BM1 = 5;
 BM2 = 3;
 TRM = 0.01;
 R = diag([GPS ACL BM1 BM2 TRM]);
+ZV = zeros(1,length(TimeVec));
+%Dynamic Sensor noise:
+GPSStep = [0.01 ones(1,round(GPSTau/Tau) - 1)*100000];
+GPS = [];
+for n = 1:round(length(TimeVec)/length(GPSStep))-1
+    GPS = [GPS GPSStep];
+end
+GPS = [GPS ones(1,20)*1000];
+ACL = ones(1,length(TimeVec))*0.1;
+BM1 = ones(1,length(TimeVec))*5;
+BM2 = ones(1,length(TimeVec))*3;
+TRM = ones(1,length(TimeVec))*0.01;
+R_dyn = [GPS;ACL;BM1;BM2;TRM];
+R_dyn_t = timeseries(R_dyn_m,TimeVec);
+R_dyn_m = diag(R_dyn(:,1)');
+for n = 2:length(TimeVec)
+    R_dyn_m = cat(3,R_dyn_m,diag(R_dyn(:,n)'));
+end
 %Static System noise:
 HGT = 0;
 SPE = 0;
-ACEL = 100;
+ACEL = 70;
 PRE = 0.1;
 TMP = 0;
 DTMP = 0.1;
-Q = [HGT;SPE;ACEL;PRE;TMP;DTMP];           
+Q = diag([HGT;SPE;ACEL;PRE;TMP;DTMP]);           
 %Dynamic Sytem noise:
-HGT = ones(1,length(TimeVec))*0.1;
-SPE = ones(1,length(TimeVec))*0.1;
+HGT = ones(1,length(TimeVec))*0;
+SPE = ones(1,length(TimeVec))*0;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
 PRE = ones(1,length(TimeVec))*0.1;
 TMP = ones(1,length(TimeVec))*0;
 DTMP = ones(1,length(TimeVec))*0.1;
 Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
-Q_dyn_t = timeseries(Q_dyn,TimeVec);
-
+Q_dyn_t = timeseries(Q_dyn_m,TimeVec);
+Q_dyn_m = diag(Q_dyn(:,1)');
+for n = 2:length(TimeVec)
+    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+end
 % Initialize
-u = zeros(1,length(TimeVec));   %Input vector is zero
-y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];                %Output are the measurements
+u = zeros(1,length(TimeVec));                       %Input vector is zero
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];        %Output are the measurements
 y_t = timeseries(y,TimeVec);
-x = [0;0;0;Po;T(1);0];                    %Is reality
+x = [0;0;0;Po;T(1);0];                              %Is reality
 P0 = eye(6);
 
 %% Excecute Simulation Static
-
+disp('Simulation start..');
 sim('RocketSE');
-
-%% Excecute Simulation Unscentend
-
-
-
-%% Loop
-for k = 1:length(TimeVec)
-    K = P*C'*pinv(C*P*C' + R);
-    x = x + K*(y(:,k) - C*x);
-    P = (eye(3)-K*C)*P;
-    
-    s(k)=x(1); v(k)=x(2); aes(k)=x(3);  %Save data from the Sensor fusion
-    
-    x = Ad*x + B*u(k);
-    P = Ad*P*Ad' + Gd*Q*Gd';
-
-end
+disp('...finished!');
 
 %% Plot
-
-figure('Name','Real flight vs estimation');
+figure('Name','Real flight vs estimation simulink');
 plot(TimeVec,h);
 hold on;
 grid on;
@@ -176,5 +180,45 @@ plot(X_estimatd.time,X_estimatd.signals.values(:,3));
 plot(TimeVec,p)
 plot(X_estimatd.time,X_estimatd.signals.values(:,4));
 legend('real Height','estiamted Height','real acceloration','estimated acceloration','real pressure','estimated pressure');
+ylabel('height & accelaration');
+xlabel('Time [s]');
+hold off;
+
+%% Excecute Simulation Unscentend
+
+
+
+%% Loop
+u = zeros(1,length(TimeVec));   %Input vector is zero
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];                %Output are the measurements
+y_t = timeseries(y,TimeVec);
+x = [0;0;0;Po;T(1);0];                    %Is reality
+P = eye(6);
+
+for k = 1:length(TimeVec)
+    K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
+    x = x + K*(y(:,k) - C*x);
+    P = (eye(6)-K*C)*P;
+    
+    x_est_loop(:,k) = x;  %Save data from the Sensor fusion
+    
+    x = Ad*x + B*u(k);
+    P = Ad*P*Ad' + Q_dyn_m(:,:,k);%Gd*Q*Gd';
+
+end
+
+%% Plot
+figure('Name','Real flight vs estimation Self calculated');
+plot(TimeVec,h);
+grid on;
+hold on;
+plot(TimeVec,x_est_loop(1,:)); 
+plot(X_estimatd.time,X_estimatd.signals.values(:,1));
+plot(TimeVec,a);
+plot(TimeVec,x_est_loop(3,:));
+plot(TimeVec,p);
+plot(TimeVec,x_est_loop(4,:));
+hold off;
+legend('real Height','estiamted Height','estimated Height Simulink','real acceloration','estimated acceloration','real pressure','estimated pressure');
 ylabel('height & accelaration');
 xlabel('Time [s]');
