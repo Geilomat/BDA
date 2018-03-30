@@ -6,8 +6,9 @@ clear all; close all;
 
 %% Initalize the System
 
-% x1 = Height, x2 = Velocity, x3 Acceloration, x4 Temp , x5 Pressure
-%Tempteratur at start = 15 C° -> 288.15 K°
+% x1 = Height, x2 = Velocity,x3 = Acceloration, x4 = Pressure, x5 = Temp,
+% x6 = Temp_dot
+% Tempteratur at start = 15 C° -> 288.15 K°
 load('PressLookUp.mat');
 
 A = [0 1 0 0 0 0;0 0 1 0 0 0; 0 0 0 0 0 0;0 PressLookUp(1,1) 0 0 0 PressLookUp(2,1);0 0 0 0 0 1;0 0 0 0 0 0];
@@ -109,17 +110,18 @@ hold on;
 plot(TimeVec,h_GPS)
 plot(TimeVec,a);
 plot(TimeVec,T)
+plot(TimeVec,p);
 plot(TimeVec,P1);
 plot(TimeVec,P2);
-legend('Real height in z','GPS heigt in z','Real Acceloration','Assumed Temperature in Kelvin','Assumed Pressure 1','Assumed Pressure 2');
+legend('Real height in z','GPS heigt in z','Real Acceloration','Assumed Temperature in Kelvin','Real Pressure','Assumed Pressure 1','Assumed Pressure 2');
 hold off;
 
 %% Add noise to sensor data
 
 T_mes = awgn(T,40,'measured');
-h_mes_GPS = awgn(h_GPS,50,'measured');
-p_mes_1 = awgn(p,40,'measured');
-p_mes_2 = awgn(p,35,'measured');
+h_mes_GPS = awgn(h_GPS,100,'measured');
+p_mes_1 = awgn(p,50,'measured');
+p_mes_2 = awgn(p,45,'measured');
 a_mes = awgn(a,30,'measured');
 
 figure('Name','Noise Data');
@@ -135,11 +137,12 @@ hold off;
 %% Create Noise Matrices
 
 % Static Sensor noise
-GPSvar = 0.1;
-ACLvar = 0.3;
-BM1var = 5;
-BM2var = 3;
-TRMvar = 0.01;
+% Calculate the optimal variance
+GPSvar = (1/(length(h_GPS)-1)*sum((h_mes_GPS-h_GPS).^2));
+ACLvar = (1/(length(a)-1)*sum((a_mes-a).^2));
+BM1var = (1/(length(P1)-1)*sum((p_mes_1-P1).^2));
+BM2var = (1/(length(P2)-1)*sum((p_mes_2-P2).^2));
+TRMvar = (1/(length(T)-1)*sum((T_mes-T).^2));
 R = diag([GPSvar ACLvar BM1var BM2var TRMvar]);
 ZV = zeros(1,length(TimeVec));
 
@@ -151,7 +154,7 @@ for n = 1:round(length(TimeVec)/length(GPSStep))-1
 end
 GPSvar = [GPSvar ones(1,length(TimeVec)-length(GPSvar))*2^32];
 
-ACLvar = ones(1,length(TimeVec))*0.1;
+ACLvar = ones(1,length(TimeVec))*ACLvar;
 
 BM1Step = [BM1var ones(1,round(P1Tau/Tau)-1)*2^32];
 BM1var = [];
@@ -169,7 +172,7 @@ end
 BM2var = [BM2var ones(1,length(TimeVec)-length(BM2var))*2^32];
 %BM2var = ones(1,length(TimeVec))*0.3;
 
-TRMvar = ones(1,length(TimeVec))*0.1;
+TRMvar = ones(1,length(TimeVec))*TRMvar;
 
 %Add all noise vectors into an noise matrix
 R_dyn = [GPSvar;ACLvar;BM1var;BM2var;TRMvar];
@@ -243,6 +246,7 @@ x = [0;0;0;Po;T(1);0];                              %Start Vector should be like
 P = eye(6);                                         %Standart can maybe be increased
 
 x_est_loop = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
+disp('Loop start..');
 for k = 1:length(TimeVec)
     K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
     x = x + K*(y(:,k) - C*x);
@@ -254,6 +258,7 @@ for k = 1:length(TimeVec)
     P = Ad*P*Ad' + Q_dyn_m(:,:,k); %Gd*Q*Gd';
 
 end
+disp('...finished!');
 
 %% Plot
 figure('Name','Real flight vs estimation Self calculated');
@@ -270,5 +275,5 @@ plot(TimeVec,p);
 plot(TimeVec,x_est_loop(4,:));
 hold off;
 legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
-ylabel('height & accelaration');
+ylabel('height & speed & accelaration & pressure');
 xlabel('Time [s]');
