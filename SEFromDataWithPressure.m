@@ -32,9 +32,10 @@ Bd = Ad * B;
 % Dummy vairable for Simualation
 simin = zeros(1,length(TimeVec));
 
+disp(['Size of A: ' num2str(size(A))]);
 
 %% Observability test;
-rank([C;C*Ad;C*Ad*Ad])
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 
 %% Read sensor Data
 load('StateFromHassan.mat');

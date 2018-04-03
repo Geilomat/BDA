@@ -33,9 +33,10 @@ Bd = Ad * B;
 % Dummy vairable for Simualation
 simin = zeros(1,length(TimeVec));
 
+disp(['Size of A: ' num2str(size(A))]);
 
 %% Observability test;
-rank([C;C*Ad;C*Ad*Ad])
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 
 %% Read sensor Data
 load('StateFromHassan.mat');
@@ -196,7 +197,7 @@ Q = diag([HGT;SPE;ACEL;PRE;TMP;DTMP]);
 HGT = ones(1,length(TimeVec))*0;
 SPE = ones(1,length(TimeVec))*0;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
-PRE = ones(1,length(TimeVec))*0.1;
+PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.1 zeros(1,10)];
 TMP = ones(1,length(TimeVec))*0;
 DTMP = ones(1,length(TimeVec))*0.1;
 Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
