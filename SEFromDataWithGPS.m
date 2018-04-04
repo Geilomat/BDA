@@ -83,7 +83,7 @@ hold off;
 
 %% Add noise to sensor data
 
-h_mes_GPS = awgn(h_GPS,100,'measured');
+h_mes_GPS = awgn(h_GPS,80,'measured');
 a_mes = awgn(a,30,'measured');
 
 figure('Name','Noise Data');
@@ -205,3 +205,7 @@ hold off;
 legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration');
 ylabel('height & speed & accelaration & pressure');
 xlabel('Time [s]');
+
+%% Difference between estimation and ground truth
+diff = abs(h-x_est_loop(1,:));
+display(['Max difference:' num2str(max(diff)) ' complete difference:' num2str(sum(diff))]);

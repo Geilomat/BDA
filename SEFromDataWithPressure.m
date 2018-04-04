@@ -184,10 +184,10 @@ Q_dyn_t = timeseries(Q_dyn,TimeVec);
 
 %% Initialize
 u = zeros(1,length(TimeVec));                       %Input vector is zero
-y = [a_mes;p_mes_1;p_mes_2;T_mes];        %Output are the measurements
+y = [a_mes;p_mes_1;p_mes_2;T_mes];                  %Output are the measurements
 y_t = timeseries(y,TimeVec);
 x0 = [0;0;0;Po;T(1);0];                             %Start points
-x =  x0;                   %Is reality
+x =  x0;                                            %Is reality
 P0 = eye(6);
 
 %% Excecute Simulation Static
@@ -247,3 +247,7 @@ hold off;
 legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
 ylabel('height & accelaration');
 xlabel('Time [s]');
+
+%% Difference between estimation and ground truth
+diff = abs(h-x_est_loop(1,:));
+display(['Max difference:' num2str(max(diff)) ' complete difference:' num2str(sum(diff))]);

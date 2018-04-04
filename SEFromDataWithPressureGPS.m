@@ -120,9 +120,9 @@ hold off;
 %% Add noise to sensor data
 
 T_mes = awgn(T,40,'measured');
-h_mes_GPS = awgn(h_GPS,100,'measured');
-p_mes_1 = awgn(p,50,'measured');
-p_mes_2 = awgn(p,45,'measured');
+h_mes_GPS = awgn(h_GPS,80,'measured');
+p_mes_1 = awgn(p,45,'measured');
+p_mes_2 = awgn(p,40,'measured');
 a_mes = awgn(a,30,'measured');
 
 figure('Name','Noise Data');
@@ -197,7 +197,7 @@ Q = diag([HGT;SPE;ACEL;PRE;TMP;DTMP]);
 HGT = ones(1,length(TimeVec))*0;
 SPE = ones(1,length(TimeVec))*0;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
-PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.1 zeros(1,10)];
+PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.7 zeros(1,10)];
 TMP = ones(1,length(TimeVec))*0;
 DTMP = ones(1,length(TimeVec))*0.1;
 Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
@@ -278,3 +278,7 @@ hold off;
 legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
 ylabel('height & speed & accelaration & pressure');
 xlabel('Time [s]');
+
+%% Difference between estimation and ground truth
+diff = abs(h-x_est_loop(1,:));
+display(['Max difference:' num2str(max(diff)) ' complete difference:' num2str(sum(diff))]);
