@@ -3,6 +3,10 @@ close all; clear all; clc;
 %%
 load('RoroTestIMU.mat')
 load('RoroTestPressure.mat')
+
+StaticEst = true;
+
+
 TimeVec = RoroTestIMUSmall.time;%(1:30000)';
 Acc = RoroTestIMUSmall.acc_z;%(1:30000)';
 Phi = RoroTestIMUSmall.gyro_z;%(1:30000)';
@@ -32,7 +36,7 @@ HeightPressure = (1+(RoroTestPress.static_pressure./Po).^(1/5.255).*(RoroTestPre
 HeightPressure = HeightPressure - HeightPressure(1);
 TimeVecPress = RoroTestPress.time';
 Temp_mes = RoroTestPress.air_temp';
-P_mes = RoroTestPress.static_pressure/100';
+P_mes = RoroTestPress.static_pressure/100000';
 figure('Name','Height Pressure')
 plot(TimeVecPress,HeightPressure);
 
@@ -66,25 +70,24 @@ HGT = 0;
 SPE = 0;
 ACEL = 70;
 TMP = 0;
-DTMP = 0.1;
-Q = diag([HGT;SPE;ACEL;TMP;DTMP]);
+Q = diag([HGT;SPE;ACEL;TMP]);
 
 %Dynamic Sytem noise:
 HGT = ones(1,length(TimeVec))*HGT;
 SPE = ones(1,length(TimeVec))*SPE;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
 TMP = ones(1,length(TimeVec))*TMP;
-DTMP = ones(1,length(TimeVec))*DTMP;
 Q_dyn = [HGT;SPE;ACEL;TMP];  
 
 %%
+if ~StaticEst
 %Add all noise vectors into an noise matrix
 Q_dyn_m = diag(Q_dyn(:,1)');
 for n = 2:length(TimeVec)
     Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
 end
 %Q_dyn_t = timeseries(Q_dyn,TimeVec);
-
+end
 %% Initialize
 
 u = zeros(1,length(TimeVec));                       %Input vector is zero
@@ -99,6 +102,7 @@ P = eye(4);
 
 x_est_loop = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
 
+disp('Start estimation loop...');
 
 for k = 1:length(TimeVec)
     %Calculate Tau an adjust A Matrix
@@ -111,8 +115,8 @@ for k = 1:length(TimeVec)
     index = find((TimeVec(k)-0.001)< TimeVecPress & TimeVecPress < (TimeVec(k) + 0.001));
     if index ~= 0;  
         K = P*C'*pinv(C*P*C' + [0.1 0 0;0 MACL 0;0 0 0.1]);
-        Height = CalcHeight(Po,P_mes(index),Temp_mes(index),0);
-        Temp = Temp_mes(index);
+        Height = CalcHeight(Po,P_mes(index(1)),Temp_mes(index(1)),0,false);
+        Temp = Temp_mes(index(1));
     else
         K = P*C'*pinv(C*P*C' + R);
     end
@@ -124,7 +128,22 @@ for k = 1:length(TimeVec)
     x_est_loop(:,k) = x;                            %Save data from the Sensor fusion
     
     x = Ad*x + Bd*u(k);
-    
-    P = Ad*P*Ad' + Q_dyn_m(:,:,k); 
-
+    if StaticEst
+        P = Ad*P*Ad' + Q; 
+    else
+        P = Ad*P*Ad' + Q_dyn_m(:,:,k); 
+    end
 end
+
+disp('...finished !!');
+
+%%  Plot the estimated values
+figure('Name','Estimated Values')
+hold on;
+grid on;
+plot(TimeVec,x_est_loop(1,:));
+plot(TimeVec,x_est_loop(2,:));
+plot(TimeVec,x_est_loop(3,:));
+plot(TimeVec,x_est_loop(4,:));
+legend('Height','Speed','Acceloration','Temperatur');
+xlabel('Time [s]');

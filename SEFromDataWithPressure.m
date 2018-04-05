@@ -10,11 +10,11 @@ clear all; close all;
 %Tempteratur at start = 15 C° -> 288.15 K°
 load('PressLookUp.mat');
 
-A = [0 1 0 0 0 0;0 0 1 0 0 0; 0 0 0 0 0 0;0 PressLookUp(1,1) 0 0 0 PressLookUp(2,1);0 0 0 0 0 1;0 0 0 0 0 0];
-B = [0;0;0;0;0;0];                %No direct input
-C = [0 0 1 0 0 0;0 0 0 1 0 0;0 0 0 1 0 0;0 0 0 0 1 0];          %Output ist Height and Acceleration
+A = [0 1 0 0;0 0 1 0;0 0 0 0;-0.00649 0 0 0];
+B = [0;0;0;0];                %No direct input
+C = [1 0 0 0;1 0 0 0;0 0 1 0;0 0 0 1];          %Output ist Height and Acceleration
 D = [0;0];
-G = [0;0;1;1;0;1];                %System noise only on acceloration
+G = [0;0;1;0];                
 
 
 
@@ -68,6 +68,7 @@ T = T0 - 0.00649*h;
 % Pressure Data Temp/Po are just assumptions !!!!
 Po = 1013.25;    %Pressure at altitude 0
 p = Po*(1-(0.0065*h)./T).^5.255;
+%h2 = ((1-(p/Po).^(1/5.255)).*T)/0.0065;
 
 %P1 Has less noise Therefore samples slower
 P1Tau = 1/50;
@@ -159,19 +160,15 @@ R_dyn_t = timeseries(R_dyn,TimeVec);
 HGT = 0;
 SPE = 0;
 ACEL = 70;
-PRE = 0.1;
 TMP = 0;
-DTMP = 0.1;
-Q = diag([HGT;SPE;ACEL;PRE;TMP;DTMP]);
+Q = diag([HGT;SPE;ACEL;TMP]);
 
 %Dynamic Sytem noise:
 HGT = ones(1,length(TimeVec))*0;
 SPE = ones(1,length(TimeVec))*0;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
-PRE = ones(1,length(TimeVec))*0.1;
 TMP = ones(1,length(TimeVec))*0;
-DTMP = ones(1,length(TimeVec))*0.1;
-Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
+Q_dyn = [HGT;SPE;ACEL;TMP];  
 
 %Add all noise vectors into an noise matrix
 Q_dyn_m = diag(Q_dyn(:,1)');
@@ -186,9 +183,9 @@ Q_dyn_t = timeseries(Q_dyn,TimeVec);
 u = zeros(1,length(TimeVec));                       %Input vector is zero
 y = [a_mes;p_mes_1;p_mes_2;T_mes];                  %Output are the measurements
 y_t = timeseries(y,TimeVec);
-x0 = [0;0;0;Po;T(1);0];                             %Start points
+x0 = [0;0;0;T(1)];                             %Start points
 x =  x0;                                            %Is reality
-P0 = eye(6);
+P0 = eye(4);
 
 %% Excecute Simulation Static
 disp('Simulation start..');
@@ -212,16 +209,20 @@ hold off;
 
 %% Loop
 u = zeros(1,length(TimeVec));                       %Input vector is zero
-y = [a_mes;p_mes_1;p_mes_2;T_mes];                  %Output are the measurements
-y_t = timeseries(y,TimeVec);
-x = [0;0;0;Po;T(1);0];                              %Start Vector should be like this
-P = eye(6);                                         %Standart can maybe be increased
+%y = [a_mes;p_mes_1;p_mes_2;T_mes];                 %Output are the measurements
+%y_t = timeseries(y,TimeVec);
+x = [0;0;0;T(1)];                                   %Start Vector should be like this
+P = eye(4);                                         %Standart can maybe be increased
 
 x_est_loop = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
 for k = 1:length(TimeVec)
     K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
-    x = x + K*(y(:,k) - C*x);
-    P = (eye(6)-K*C)*P;
+    
+    Height1 = CalcHeight(Po,p_mes_1(k),T_mes(k),0,true);
+    Height2 = CalcHeight(Po,p_mes_2(k),T_mes(k),0,true);
+    Temp = T_mes(k);
+    x = x + K*([Height1;Height2;a_mes(k);Temp] - C*x);
+    P = (eye(4)-K*C)*P;
     
     x_est_loop(:,k) = x;                            %Save data from the Sensor fusion
     
@@ -241,10 +242,10 @@ plot(TimeVec,v);
 plot(TimeVec,x_est_loop(2,:));
 plot(TimeVec,a);
 plot(TimeVec,x_est_loop(3,:));
-plot(TimeVec,p);
+plot(TimeVec,T);
 plot(TimeVec,x_est_loop(4,:));
 hold off;
-legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
+legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real Temp','estimated Temp');
 ylabel('height & accelaration');
 xlabel('Time [s]');
 
