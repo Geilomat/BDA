@@ -103,10 +103,20 @@ hold off;
 
 %% Add noise to sensor data
 
-T_mes = awgn(T,40,'measured');
-p_mes_1 = awgn(p,40,'measured');
-p_mes_2 = awgn(p,35,'measured');
-a_mes = awgn(a,30,'measured');
+VART = 0.002;
+VARP1 = 0.4950;
+VARP2 = 0.6950;
+VARA = 7.1177e-07;
+
+T_mes = T + randn(1,length(T)).*sqrt(VART);
+a_mes = a + randn(1,length(a)).*sqrt(VARA);
+p_mes_1 = p + randn(1,length(P1)).*sqrt(VARP1);
+p_mes_2 = p + randn(1,length(P2)).*sqrt(VARP2);
+
+% T_mes = awgn(T,40,'measured');
+% p_mes_1 = awgn(p,40,'measured');
+% p_mes_2 = awgn(p,35,'measured');
+% a_mes = awgn(a,30,'measured');
 
 figure('Name','Noise Data');
 hold on;
@@ -251,4 +261,4 @@ xlabel('Time [s]');
 
 %% Difference between estimation and ground truth
 diff = abs(h-x_est_loop(1,:));
-display(['Max difference:' num2str(max(diff)) ' complete difference:' num2str(sum(diff))]);
+display(['Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);

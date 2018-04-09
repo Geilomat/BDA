@@ -83,8 +83,15 @@ hold off;
 
 %% Add noise to sensor data
 
-h_mes_GPS = awgn(h_GPS,80,'measured');
-a_mes = awgn(a,30,'measured');
+
+
+VARA = 7.1177e-07;
+VARGPS = 0.2;
+
+a_mes = a + randn(1,length(a)).*sqrt(VARA);
+h_mes_GPS = h_GPS + randn(1,length(h_GPS)).*sqrt(VARGPS);
+% h_mes_GPS = awgn(h_GPS,80,'measured');
+% a_mes = awgn(a,30,'measured');
 
 figure('Name','Noise Data');
 hold on;
@@ -208,4 +215,4 @@ xlabel('Time [s]');
 
 %% Difference between estimation and ground truth
 diff = abs(h-x_est_loop(1,:));
-display(['Max difference:' num2str(max(diff)) ' complete difference:' num2str(sum(diff))]);
+display(['Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
