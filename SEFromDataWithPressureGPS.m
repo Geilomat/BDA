@@ -14,16 +14,24 @@ load('PressLookUp.mat');
 A = [0 1 0 0 0 0;0 0 1 0 0 0; 0 0 0 0 0 0;0 PressLookUp(1,1) 0 0 0 PressLookUp(2,1);0 0 0 0 0 1;0 0 0 0 0 0];
 B = [0;0;0;0;0;0];                %No direct input
 C = [1 0 0 0 0 0;0 0 1 0 0 0;0 0 0 1 0 0;0 0 0 1 0 0;0 0 0 0 1 0];          %Output ist Height and Acceleration
-D = [0;0];
+D = [0];
 G = [0;0;1;1;0;1];                %System noise only on acceloration
 
 
 
 % Get the time vector from the ARIS simulation.
-load('TimeFromHassan.mat');
+%load('TimeFromHassan.mat');
+load('TimeSimu.mat');
+% Interpolate to get to 1 ms sampling time.
 TimeVec = t';
-Tau =  TimeVec(end)/length(TimeVec);
+Tau = TimeVec(end)/length(TimeVec);
+%TauData =  
+%TauDiff = round(TauData/Tau);
+%TimeVec = interp(TimeVec,TauDiff);
+%Tau =  round(TimeVec(end)/length(TimeVec)*1000)/1000;
 
+
+Sys = ss(A,B,C,D,Tau)
 
  %Diskretierung der Systemmatritzen
 Ad = expm(A*Tau);     
@@ -39,14 +47,15 @@ disp(['Size of A: ' num2str(size(A))]);
 disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 
 %% Read sensor Data
-load('StateFromHassan.mat');
+load('StateSimu.mat');
 
 % Get the heigth vector from the ARIS simulation.
 h = state(:,3)';
+%h = interp(hvec,5);
 
 % plot it
 figure('Name','Real Data')
-plot(h,'b') %%Original bahn
+plot(TimeVec,h,'b') %%Original bahn
 legend('Real height in z');
 
 
@@ -54,12 +63,14 @@ legend('Real height in z');
 
 figure('Name','Real Data');
 % get acceloration by differentiate height:
-v = diff(h)/Tau;
-a = diff(v)/Tau;
+v = diff(h)/(Tau);
+a = diff(v)/(Tau);
 % Ad zeros to maintain vector length
 v = [v 0];
 a = [a 0 0];
 
+%v = interp(v,5);
+%a = interp(a,5);
 
 % get height of GPS by deleting engouh values so it becomes 5Hz sample rate
 % and then ad Zero Order Hold to get static value
@@ -119,13 +130,11 @@ hold off;
 
 %% Add noise to sensor data
 
-
-
 VART = 0.002;
 VARP1 = 0.2950;
 VARP2 = 0.4950;
 VARA = 7.1177e-07;
-VARGPS = 0.2;
+VARGPS = 0.1;
 
 T_mes = T + randn(1,length(T)).*sqrt(VART);
 a_mes = a + randn(1,length(a)).*sqrt(VARA);
@@ -211,7 +220,7 @@ Q = diag([HGT;SPE;ACEL;PRE;TMP;DTMP]);
 HGT = ones(1,length(TimeVec))*0;
 SPE = ones(1,length(TimeVec))*0;
 ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*20];
-PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.7 zeros(1,10)];
+PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.7 zeros(1,10)];         %Due to linearization it gets less accurate in the middle
 TMP = ones(1,length(TimeVec))*0;
 DTMP = ones(1,length(TimeVec))*0.1;
 Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP];  
@@ -222,8 +231,6 @@ for n = 2:length(TimeVec)
     Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
 end
 Q_dyn_t = timeseries(Q_dyn,TimeVec);
-
-
 
 %% Initialize
 u = zeros(1,length(TimeVec));                       %Input vector is zero
@@ -270,12 +277,13 @@ for k = 1:length(TimeVec)
     x_est_loop(:,k) = x;                            %Save data from the Sensor fusion
     
     x = Ad*x + Bd*u(k);
-    P = Ad*P*Ad' + Q_dyn_m(:,:,k); %Gd*Q*Gd';
+    P = Ad*P*Ad' + Q_dyn_m(:,:,k); %Gd'* Q_dyn_m(:,:,k)*Gd; %Gd*Q*Gd';
 
 end
 disp('...finished!');
 
 %% Plot
+
 figure('Name','Real flight vs estimation Self calculated');
 plot(TimeVec,h);
 grid on;
@@ -293,6 +301,90 @@ legend('real Height','estiamted Height','estimated Height Simulink','real Speed'
 ylabel('height & speed & accelaration & pressure');
 xlabel('Time [s]');
 
+%% Loop 2
+A = [0 1 0 0;0 0 1 0; 0 0 0 0;-0.00649 0 0 0];
+B = [0;0;0;0];                %No direct input
+C = [1 0 0 0;1 0 0 0;1 0 0 0;0 0 1 0;0 0 0 1];          %Output ist Height and Acceleration
+D = [0];
+G = [0;0;1;0];                %System noise only on acceloration
+
+
+ %Diskretierung der Systemmatritzen
+Ad = expm(A*Tau);     
+Gd = Ad * G;
+Bd = Ad * B;
+
+Q_dyn = [HGT;SPE;ACEL;TMP];  
+
+%Add all noise vectors into an noise matrix
+Q_dyn_m = diag(Q_dyn(:,1)');
+for n = 2:length(TimeVec)
+    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+end
+
+u = zeros(1,length(TimeVec));                       %Input vector is zero
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];        %Output are the measurements
+y_t = timeseries(y,TimeVec);
+x = [0;0;0;T(1)];                              %Start Vector should be like this
+P = eye(4);                                         %Standart can maybe be increased
+Height1 = 0;
+Height2 = 0;
+Temp = T(1);
+
+
+x_est_loop2 = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
+disp('Loop 2 start..');
+for k = 1:length(TimeVec)
+    K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
+    Height1 = CalcHeight(Po,p_mes_1(k),T_mes(k),0,true);
+    Height2 = CalcHeight(Po,p_mes_2(k),T_mes(k),0,true);
+    Temp = T_mes(k);
+    x = x + K*([h_mes_GPS(k);Height1;Height2;a_mes(k);Temp] - C*x);
+    P = (eye(4)-K*C)*P;
+    
+    x_est_loop2(:,k) = x;                            %Save data from the Sensor fusion
+    
+    x = Ad*x + Bd*u(k);
+    P = Ad*P*Ad' + Q_dyn_m(:,:,k); %Gd*Q*Gd';
+
+end
+disp('...finished!');
+
+%% Plot
+
+figure('Name','Real flight 2 vs estimation Self calculated');
+plot(TimeVec,h);
+grid on;
+hold on;
+plot(TimeVec,x_est_loop2(1,:)); 
+plot(TimeVec,x_est_loop(1,:));
+plot(TimeVec,v);
+plot(TimeVec,x_est_loop2(2,:));
+plot(TimeVec,a);
+plot(TimeVec,x_est_loop2(3,:));
+plot(TimeVec,p);
+plot(TimeVec,x_est_loop2(4,:));
+hold off;
+legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
+ylabel('height & speed & accelaration & pressure');
+xlabel('Time [s]');
+
 %% Difference between estimation and ground truth
 diff = abs(h-x_est_loop(1,:));
-display(['Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+display(['Loop 1 Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+diff = abs(h-x_est_loop2(1,:));
+display(['Loop 2 Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+
+%%
+figure('Name','Generated sensor data');
+hold on;
+grid on;
+plot(TimeVec,h);
+plot(TimeVec,h_GPS)
+plot(TimeVec,a);
+plot(TimeVec,T)
+plot(TimeVec,p);
+legend('Real height in z','GPS heigt in z','Acceloration','Temperature','Pressure');
+hold off;
+ylabel('Height [m], Accelaration [m/s^2], Temperature [K°], Pressure [hPa]');
+xlabel('Time [s]');

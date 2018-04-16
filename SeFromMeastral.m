@@ -53,7 +53,7 @@ Line = fgetl(fid);
             % Read line of logfile
             [data, num, err, ind1] = sscanf(Line, '%f %s %f %f %f', 10);
             sample_time = data(1); 
-            if(sample_time > 180 & sample_time < 250.75)
+            if(sample_time > 185 & sample_time < 300)
             sample_id = char(data(2)); 
             
             % TODO: Data types checks, handle formatting errors
@@ -96,13 +96,13 @@ fclose(fid);
 figure('Name','Pressure and Acceloration');
 grid on;
 for k = 1:length(log_temp)
-    hnew(k) = CalcHeight(log_press(1,2),log_press(k,2),log_temp(k,2),0,false);
+    hnew(k) = CalcHeight(log_press(1,2),log_press(k,2),log_temp(1,2),0,false);
 end
 plot(log_press(:,1),hnew);
 hold on;
 plot(log_imu_t,log_imu_a(:,3));
 
-newAngle = filter(0.3,[1 1-0.3],log_imu_g(:,2));
+newAngle = filter(0.999,[1 1-0.999],log_imu_g(:,2));
 a_mes = log_imu_a(:,3).*sin(newAngle*pi/180);%log_imu_g(:,3)*pi/180);
 plot(log_imu_t,a_mes);
 hold off;
@@ -133,42 +133,44 @@ disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 %% Get to the neeeded Matrices:
 
 %Calculate noise of sensors out of the Roro Data befor icgnognitiona.
-Tico = 199.2;                 %Icoginition time point
-
+Tico = 199;                 %Icoginition time point
+Burntime = 1.5; % [s]
 %Sensor Noise:
 k = 1;
 while TimeVec(k) < 199.2
     k= k+1;
 end
-MACL = (1/(length(a_mes(1:k))-1)*sum((a_mes(1:k)-0).^2))    
+MACL = (1/(length(a_mes(1:k))-1)*sum((a_mes(1:k)-0).^2))*1000    
 k = 1;
 while TimeVecPress(k) < 199.2
     k =k+1;
 end
-MPRS = (1/(length(hnew(1:k))-1)*sum((hnew(1:k)-0).^2))    
-T0 = sum(log_temp(1:k,2))/k;
+MPRS = (1/(length(hnew(1:k))-1)*sum((hnew(1:k)-0).^2))/50    
 
+T0 = sum(log_temp(1:k,2))/k;
 MTMP = (1/(length(log_temp(1:k,2))-1)*sum((log_temp(1:k,2)-T0).^2))
+
 R = diag([2^32;MACL;2^32]);
+
 
 %Static System noise:
 HGT = 0;
 SPE = 0;
-ACEL = 0.05;
-TMP = 0.001;
+ACEL = 0.01;
+TMP = 0.005;
 Q = diag([HGT;SPE;ACEL;TMP]);
 
-%Dynamic Sytem noise:
-HGT = ones(1,length(TimeVec))*HGT;
-SPE = ones(1,length(TimeVec))*SPE;
-ACEL = ones(1,length(TimeVec))*ACEL;%[100 100 100 50 30 ones(1,length(TimeVec)-5)*ACEL];
-TMP = ones(1,length(TimeVec))*TMP;
-Q_dyn = [HGT;SPE;ACEL;TMP];  
-%Add all noise vectors into an noise matrix
-Q_dyn_m = diag(Q_dyn(:,1)');
-for n = 2:length(TimeVec)
-    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
-end
+% %Dynamic Sytem noise:
+% HGT = ones(1,length(TimeVec))*HGT;
+% SPE = ones(1,length(TimeVec))*SPE;
+% ACEL = ones(1,length(TimeVec))*ACEL;
+% TMP = ones(1,length(TimeVec))*TMP;
+% Q_dyn = [HGT;SPE;ACEL;TMP];  
+% %Add all noise vectors into an noise matrix
+% Q_dyn_m = diag(Q_dyn(:,1)');
+% for n = 2:length(TimeVec)
+%     Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+% end
 
 
 %% Initialize
@@ -177,9 +179,9 @@ u = zeros(1,length(TimeVec));                       %Input vector is zero
 %y_t = timeseries(y,TimeVec);
 x0 = [0;0;0;log_temp(1,2)];                         %Start points
 x =  x0;                                            %Is reality
-Po = 1032.15;
+Po = 1013.25;
 P = eye(4);
-StaticEst = false;
+StaticEst = true;
 
 %% Loop
 
@@ -187,7 +189,7 @@ x_est_loop = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
 Height = CalcHeight(log_press(1,2),log_press(1,2),log_temp(1,2),0,false);
 Temp = log_temp(1,2);
 
-
+lengthp = 0;
 disp('Start estimation loop...');
 
 for k = 1:length(TimeVec)
@@ -197,15 +199,29 @@ for k = 1:length(TimeVec)
         Ad = expm(A*Tau);     
     end
     
+        x = Ad*x;% + Bd*u(k);
+    
+    if StaticEst
+        P = Ad*P*Ad' + Q; 
+    else
+        if TimeVec(k) > Tico & TimeVec(k) < Tico + Burntime
+            P = Ad*P*Ad' + diag([HGT;SPE;ACEL*10;TMP]); 
+        else
+            P = Ad*P*Ad' + Q; 
+        end
+        
+    end
+    
     %Determine if it is between after Icognition;
-    if TimeVec(k) > Tico & TimeVec(k) < Tico + 1.50
-        TempMACL = MACL * 200;
+    if TimeVec(k) > Tico & TimeVec(k) < Tico + Burntime
+        TempMACL = MACL; %* 200;
     else
         TempMACL = MACL;
     end
     %Determine if a Press/Temp measurement is also avaiables
-    index = find((TimeVec(k)-0.0005)< TimeVecPress & TimeVecPress < (TimeVec(k) + 0.0005));
+    index = find((TimeVec(k)-0.0003)< TimeVecPress & TimeVecPress < (TimeVec(k) + 0.0003));
     if index ~= 0;
+        lengthp = lengthp+1;
         %if x(1) > 400           
             %K = P*C'*pinv(C*P*C' + [MPRS 0 0;0 MACL 0;0 0 0.01]);
         %else
@@ -213,7 +229,7 @@ for k = 1:length(TimeVec)
         %end
         TempMPRS = MPRS;
         TempMTMP = MTMP;
-        Height = CalcHeight(log_press(1,2),log_press(index(1),2),log_temp(index(1),2),0,false);
+        Height = CalcHeight(log_press(1,2),log_press(index(1),2),log_temp(1,2),0,false);
         Temp = log_temp(index(1),2);
     else
         TempMPRS = 2^32;
@@ -227,13 +243,7 @@ for k = 1:length(TimeVec)
     
     x_est_loop(:,k) = x;                            %Save data from the Sensor fusion
     
-    x = Ad*x;% + Bd*u(k);
-    
-    if StaticEst
-        P = Ad*P*Ad' + Q; 
-    else
-        P = Ad*P*Ad' + Q_dyn_m(:,:,k); 
-    end
+
 end
 
 disp('...finished !!');
@@ -249,5 +259,5 @@ plot(TimeVec,x_est_loop(3,:));
 plot(log_imu_t,a_mes);
 plot(TimeVec,x_est_loop(4,:));
 plot(TimeVecPress,log_temp(:,2));
-legend('Height','Height out of Pressure','Speed','Acceloration','Acceloration Measured','Temperatur','Temperature Measured');
+legend('Height','Height out of Pressure','Speed Estimated','Acceloration Estimated','Acceloration Measured','Temperatur','Temperature Measured');
 xlabel('Time [s]');

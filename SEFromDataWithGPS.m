@@ -86,7 +86,7 @@ hold off;
 
 
 VARA = 7.1177e-07;
-VARGPS = 0.2;
+VARGPS = 1;
 
 a_mes = a + randn(1,length(a)).*sqrt(VARA);
 h_mes_GPS = h_GPS + randn(1,length(h_GPS)).*sqrt(VARGPS);

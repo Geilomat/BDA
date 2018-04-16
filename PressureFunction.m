@@ -17,7 +17,7 @@ T(k+1,:) = ones(1,length(h))*288.15;
 
 %% Get the different pressure curves
 for k = 1:length(T0)
-    p(k,:) = P0*(1-(0.0065*h)./T(k,:)).^5.255;
+    p(k,:) = P0*(1-(0.0065*h)./288.15).^5.255;
 end
 p(length(T0)+1,:) = P0*(1-(0.0065*h)./288.15).^5.255;
 %% Plot to See Changes
@@ -36,7 +36,7 @@ zlabel('Temp [k°]');
 %% Static Vs. Dynamic
 
 p_Stac(1,:) = P0*(1-(0.0065*h)./288.15).^5.255;
-p_Stac(2,:) = P0*(1-(0.0065*h)./T(2,:)).^5.255;
+p_Stac(2,:) = P0*(1-(0.0065*h)./288.15).^5.255;
 
 figure('Name','Pressure with static and changing Temp');
 hold on;
@@ -69,7 +69,7 @@ legend('Static','Dynamic','Linearized');
 
 %% Same as above with 60 Degrees
 p_Stac(1,:) = P0*(1-(0.0065*h)./(273.15+60)).^5.255;
-p_Stac(2,:) = P0*(1-(0.0065*h)./T(5,:)).^5.255;
+p_Stac(2,:) = P0*(1-(0.0065*h)./(273.15+60)).^5.255;
 
 deltaPH = p_Stac(1,end)-p_Stac(1,1);
 deltaT = T(5,end)-T(5,1);
@@ -106,7 +106,7 @@ end
 for k = 1:50
 
 p_Stac(1,:) = P0*(1-(0.0065*h)./(273.15+(k-1)*2)).^5.255;
-p_Stac(2,:) = P0*(1-(0.0065*h)./T(k,:)).^5.255;
+p_Stac(2,:) = P0*(1-(0.0065*h)./(273.15+(k-1)*2)).^5.255;
 
 deltaPH = p_Stac(1,end)-p_Stac(1,1);
 deltaT = T(5,end)-T(5,1);
