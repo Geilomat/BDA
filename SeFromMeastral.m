@@ -100,10 +100,10 @@ for k = 1:length(log_temp)
 end
 plot(log_press(:,1),hnew);
 hold on;
-plot(log_imu_t,log_imu_a(:,3));
+plot(log_imu_t,log_imu_a(:,2));
 
-newAngle = filter(0.999,[1 1-0.999],log_imu_g(:,2));
-a_mes = log_imu_a(:,3).*sin(newAngle*pi/180);%log_imu_g(:,3)*pi/180);
+newAngle = filter(0.999,[1 1-0.999],log_imu_g(:,1));
+a_mes = log_imu_a(:,3).*-cos(log_imu_g(:,1)*pi/180);%log_imu_g(:,3)*pi/180);
 plot(log_imu_t,a_mes);
 hold off;
 
@@ -140,12 +140,12 @@ k = 1;
 while TimeVec(k) < 199.2
     k= k+1;
 end
-MACL = (1/(length(a_mes(1:k))-1)*sum((a_mes(1:k)-0).^2))*1000    
+MACL = (1/(length(a_mes(1:k))-1)*sum((a_mes(1:k)-0).^2))%*1000    
 k = 1;
 while TimeVecPress(k) < 199.2
     k =k+1;
 end
-MPRS = (1/(length(hnew(1:k))-1)*sum((hnew(1:k)-0).^2))/50    
+MPRS = (1/(length(hnew(1:k))-1)*sum((hnew(1:k)-0).^2))%/50    
 
 T0 = sum(log_temp(1:k,2))/k;
 MTMP = (1/(length(log_temp(1:k,2))-1)*sum((log_temp(1:k,2)-T0).^2))
@@ -205,7 +205,7 @@ for k = 1:length(TimeVec)
         P = Ad*P*Ad' + Q; 
     else
         if TimeVec(k) > Tico & TimeVec(k) < Tico + Burntime
-            P = Ad*P*Ad' + diag([HGT;SPE;ACEL*10;TMP]); 
+            P = Ad*P*Ad' + diag([HGT;SPE;ACEL*1000;TMP]); 
         else
             P = Ad*P*Ad' + Q; 
         end
@@ -214,7 +214,7 @@ for k = 1:length(TimeVec)
     
     %Determine if it is between after Icognition;
     if TimeVec(k) > Tico & TimeVec(k) < Tico + Burntime
-        TempMACL = MACL; %* 200;
+        TempMACL = MACL;%* 20;
     else
         TempMACL = MACL;
     end

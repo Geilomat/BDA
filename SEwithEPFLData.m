@@ -2,13 +2,15 @@ clear all; clc; close all; % remove that
 
 
 log_time = [];     % Time of IMO sample: synch. with gyro/accel Nx[s]
-log_data = [];
-% log_imu_a = [];     % Accelerometer: Accels    ax, ay, az  Nx3*[m/s^2]
-% log_imu_g = [];     % Gyroscope, Angular rates gx, gy, gz  Nx3*[rad/s]
-% log_temp  = [];     % Temperature?
-% log_press = [];     % Pressure sensor: Mx3*[time[s], pressure[Pa/m^2], altitude[m]]
+log_data = []; 
+log_imu_a = [];     % Accelerometer: Accels    ax, ay, az  Nx3*[m/s^2]
+log_imu_g = [];     % Gyroscope, Angular rates gx, gy, gz  Nx3*[rad/s]
+log_temp  = [];     % Temperature?
+log_press = [];     % Pressure sensor:[time[s], pressure[Pa/m^2], airspeed]
 % log_pos   = [];     % Nx[time  xpos     ypos     zpos        zpos2]
-% log_h     = [];     % Nx[time  press    alti     altispeed]
+log_h     = [];     % Nx[time altituded]
+log_airspeed = [];  % [airspeed]
+log_gps   = [];
 % log_vel   = [];     % Nx[time  xvel     yvel     zvel        zvel2]
 % log_rot   = [];     % Nx[time  rot.v.x  rot.v.y  rot.v.z     rot.s]
 % log_b_sensors_noise = true; % true if sensors contain noise
@@ -18,10 +20,13 @@ log_data = [];
 % Open log file uncomment for different Flights.
 % EPFL Tir_test3D_fix;
 %load('Tir_test3d2_Paths.mat');
-load('Tir_test3d1_Paths.mat')
+%load('Tir_test3d1_Paths.mat');
+%load('18_11_18_Eric_Paths.mat');
+load('18_11_18_Greg_Paths.mat');
 
 
 for k = 1:size(Paths);
+    
 fid = fopen(Paths(k,:), 'r');
 if fid == -1
    error('Cannot open file: %s', FileName);
@@ -42,11 +47,17 @@ end
         else
             % Read line of logfile
             [data, num, err, ind1] = sscanf(Line, '%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f', 15);
-            sample_time = data(2); 
+            %sample_time = data(2); 
             %if(sample_time > 185 & sample_time < 300)
             %sample_id = char(data(2)); 
             log_time = [log_time; data(2)];
-            log_data = [log_data; data(3:end)'];
+            %log_data = [log_data; data(3:end)'];
+            log_h = [log_h;data(3)];
+            log_airspeed = [log_airspeed; data(4)];
+            log_press = [log_press; data(5)];
+            log_temp = [log_temp; data(6)];
+            log_imu_a = [log_imu_a; data(7) data(8) data(9)];
+            log_imu_g = [log_imu_g; data(10) data(11) data(12)];
             
 %             % TODO: Data types checks, handle formatting errors
 %             if sample_id=='g'      % Gyroscope data
@@ -82,11 +93,20 @@ end
 
 fclose(fid);
 end
+
+%% Adjust time vector;
+startTime = log_time(1);
+log_time(:) = log_time(:)-startTime;
+log_time(:) = log_time(:)/1000000;
 %%
 clear all;
-Paths(1,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_018_1519469005128';
-Paths(2,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_019_1519469021656';
-Paths(3,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_020_1519469039941';
-Paths(4,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_021_1519469071747';
-Paths(5,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_022_1519469099947';
+Paths(1,:) = '../SensorData/EPFLData/18.11.2017.2 - Greg/telemetry_data_1_1511012308145';
+Paths(2,:) = '../SensorData/EPFLData/18.11.2017.2 - Greg/telemetry_data_2_1511012328160';
+Paths(3,:) = '../SensorData/EPFLData/18.11.2017.2 - Greg/telemetry_data_3_1511012347617';
+Paths(4,:) = '../SensorData/EPFLData/18.11.2017.2 - Greg/telemetry_data_4_1511012369307';
+Paths(5,:) = '../SensorData/EPFLData/18.11.2017.2 - Greg/telemetry_data_5_1511012401268';
+%Paths(6,:) = '../SensorData/EPFLData/18.11.2017.1 - Eric/telemetry/flight data/telemetry_data_6_1511008823759';
+%Paths(7,:) = '../SensorData/EPFLData/18.11.2017.1 - Eric/telemetry/flight data/telemetry_data_7_1511008838265';
+%Paths(8,:) = '../SensorData/EPFLData/18.11.2017.1 - Eric/telemetry/flight data/telemetry_data_8_1511008909814';
+%Paths(9,:) = '../SensorData/EPFLData/18.11.2017.1 - Eric/telemetry/flight data/telemetry_data_1_1511008752975';
 %Paths(6,:) = '../SensorData/EPFLData/24.02.2018.1 - Tir_test3D/sensors_data_005_1519479278352';
