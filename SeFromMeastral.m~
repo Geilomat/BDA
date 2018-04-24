@@ -214,7 +214,7 @@ p_var_upflight = sum((log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upfl
 
 decayTime = 3;
 T_mean = sum(log_temp(1:T_ico_ind-decayTime,2))/(T_ico_ind-decayTime);
-T_var_preIco  = sum((log_temp(1:T_ico_ind-decayTime,2)-T_mean).^2)/(T_ico_ind-decayTime-1);
+T_var_preIco  = sum((log_temp(1:T_ico_ind-decayTime)-T_mean,2).^2)/(T_ico_ind-decayTime-1);
 
 %find the best polynom to recreate curve during burntime:
 riseTime = 6;
@@ -234,7 +234,7 @@ p_upflight_curve =polyval(p_upflight,log_press(T_brn_ind+riseTime:T_par_ind-deca
 T_var_upflight = sum((log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve).^2)/(T_par_ind-decayTime-(T_brn_ind+riseTime)-1);
 
 %For checking purpose:
-%plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
+plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
 
 
 %% State Estimation:
