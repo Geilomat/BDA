@@ -53,7 +53,7 @@ Line = fgetl(fid);
             % Read line of logfile
             [data, num, err, ind1] = sscanf(Line, '%f %s %f %f %f', 10);
             sample_time = data(1); 
-            if(sample_time > 185 & sample_time < 300)
+            if(sample_time > 100 & sample_time < 210)
             sample_id = char(data(2)); 
             
             % TODO: Data types checks, handle formatting errors
@@ -107,27 +107,29 @@ angle = zeros(length(log_time),1);
 %angle(1) = 0;
 for k = 2:length(log_time)
     dT = log_time(k) - log_time(k-1);
-    angle(k) = angle(k-1) + (log_imu_g(k,3))*dT;
+    angle(k) = angle(k-1) + ((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
 end
 
 %newAngle = filter(0.999,[1 1-0.999],log_imu_g(:,1));
 %angle = cumsum(log_imu_g(:,3));
 %a_mes = log_imu_a(:,3).*-cos(angle*pi/180);%log_imu_g(:,3)*pi/180);
-az = log_imu_a(:,3).*-cos(angle*pi/180);%*9.81;
+az = log_imu_a(:,3).*-cos(angle*pi/180)*9.81;
 plot(log_time,az);
+plot(log_time,angle)
 hold off;
 
 %% Find Icongnition Time und Burnduration:
+acc_mes = az;
 
 T_ico_ind = 1; %Icogntiono Time index
-while az(T_ico_ind) < 2
+while az(T_ico_ind) < 10
    T_ico_ind = T_ico_ind + 1; 
 end
 
 T_ico = log_time(T_ico_ind); %Icogniotion time
 
 T_brn_ind = T_ico_ind; %Burnout time index
-while az(T_brn_ind) > 1
+while az(T_brn_ind) > 10
     T_brn_ind = T_brn_ind +1;
 end
 
@@ -136,43 +138,111 @@ T_brn = log_time(T_brn_ind); %Burnout time
 
 T_par_ind = T_brn_ind; % Parachute time index
 
-while abs(az(T_par_ind)) < 1.1
+while abs(az(T_par_ind)) < 15
    T_par_ind = T_par_ind + 1; 
 end
 
 T_par = log_time(T_par_ind); % Parachute time
 
+%% Calculate Mean, Variance and Bandwith before Icognition, during Burntime and during ubpflight until parachute activation from Accelerometer:
+fs = 1/(log_time(end)/length(log_time));
+figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Accel');
 
-
-%% Calculate Mean an Variance before Icognition, during Burntime and during ubpflight until parachute activation from Accelerometer:
-
+% Mean and Variance before icognition
 decayTime = 3;
-a_mean = sum(az(1:T_ico_ind-decayTime))/(T_ico_ind-decayTime);
-a_var_preIco  = sum((az(1:T_ico_ind-decayTime)-a_mean).^2)/(T_ico_ind-decayTime-1);
+a_mean = mean(acc_mes(1:T_ico_ind-decayTime));
+a_var_preIco  = var((acc_mes(1:T_ico_ind-decayTime)-a_mean));
+
+subplot(4,1,1);
+plot(log_time(1:T_ico_ind-decayTime),acc_mes(1:T_ico_ind-decayTime),log_time(1:T_ico_ind-decayTime),ones(1,length(log_time(1:T_ico_ind-decayTime)))*a_mean);
+
+% Bandwith
+a_noise_preIco = acc_mes(1:T_ico_ind-decayTime)-a_mean;
+acorr_preIco = xcorr(a_noise_preIco);
+N = length(acorr_preIco);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],acorr_preIco);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(acorr_preIco) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_preIco),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(acc_mes(1:T_ico_ind-decayTime)-a_mean);
+title('Histogram');
 
 % fing the best polynom to recreate curve during burntime:
+figure('Name','Autocorrelation and Leistungsdichtespektrum between Icognition and Burnout');
 riseTime = 9;
 decayTime = 3;
-p_brn = polyfit(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),az(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
+p_brn = polyfit(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
 p_brn_curve = polyval(p_brn,log_time(T_ico_ind+riseTime:T_brn_ind-decayTime));
-a_var_brn = sum((az(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve).^2)/(T_brn_ind-decayTime-(T_ico_ind+riseTime)-1);
+a_var_brn = var(acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime));
 
-%For checking purpose:
-plot(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),az(T_ico_ind+riseTime:T_brn_ind-decayTime),log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),p_brn_curve);
+subplot(4,1,1);
+plot(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime),log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),p_brn_curve);
+
+% Bandwith
+a_noise_brn = acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve;
+acorr_brn = xcorr(a_noise_brn);
+N = length(acorr_brn);
+
+subplot(4,1,2);
+stem([-N/2:N/2-1],acorr_brn);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(acorr_brn) < 2048
+    N = 2048;
+end
+stem([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_brn),N))));
+ylabel('Energy in [dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve);
+title('Histogram');
 
 % fing the best polynom to recreate curve during upflight:
+figure('Name','Autocorrelation and Leistungsdichtespektrum after Burnout');
 riseTime = 20;
 decayTime = 12;
-p_upflight = polyfit(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),az(T_brn_ind+riseTime:T_par_ind-decayTime),2);
+p_upflight = polyfit(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime),2);
 p_upflight_curve =polyval(p_upflight,log_time(T_brn_ind+riseTime:T_par_ind-decayTime));
-a_var_upflight = sum((az(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve).^2)/(T_par_ind-decayTime-(T_brn_ind+riseTime)-1);
+a_var_upflight = var(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 
-%For checking purpose:
-%plot(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),az(T_brn_ind+riseTime:T_par_ind-decayTime),log_time(T_brn_ind+riseTime:T_par_ind-decayTime),p_upflight_curve);
+subplot(4,1,1);
+plot(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime),log_time(T_brn_ind+riseTime:T_par_ind-decayTime),p_upflight_curve);
 
-%% Same for Barometer pressure:
+% Bandwith
+a_noise_upflight = acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve;
+acorr_upflight = xcorr(a_noise_upflight);
+N = length(acorr_upflight);
+subplot(4,1,2);
+stem([-N/2:N/2-1],acorr_upflight);
+title('Autocorrelation');
 
-decayTime = 3;
+subplot(4,1,3);
+if length(acorr_upflight) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_upflight),N))));
+ylabel('Energy in [dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
+title('Histogram');
+
+
+%% Find the right indexes in the Barometer Timevector because this was sampled slower:
+
 T_ico_ind = 1;
 while log_press(T_ico_ind,1) < T_ico
     T_ico_ind =  T_ico_ind + 1;
@@ -186,56 +256,208 @@ while log_press(T_par_ind,1) < T_par
     T_par_ind = T_par_ind + 1;
 end
 
-p_mean = sum(log_press(1:T_ico_ind-decayTime,2))/(T_ico_ind-decayTime);
-p_var_preIco  = sum((log_press(1:T_ico_ind-decayTime,2)-p_mean).^2)/(T_ico_ind-decayTime-1);
 
+%% Same for Barometer pressure:
+
+figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Pressure');
+
+decayTime = 3;
+p_mean = mean(log_press(1:T_ico_ind-decayTime,2));
+p_var_preIco  = var(log_press(1:T_ico_ind-decayTime,2)-p_mean);
+
+
+subplot(4,1,1);
+plot(log_press(1:T_ico_ind-decayTime,1),log_press(1:T_ico_ind-decayTime,2),log_press(1:T_ico_ind-decayTime,1),ones(T_ico_ind-decayTime,1).*p_mean);
+title('mean vs real');
+
+% Bandwith
+p_noise_preIco = log_press(1:T_ico_ind-decayTime,2)-p_mean;
+pcorr_preIco = xcorr(p_noise_preIco);
+N = length(pcorr_preIco);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],pcorr_preIco);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(pcorr_preIco) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(pcorr_preIco),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(log_press(1:T_ico_ind-decayTime,2)-p_mean);
+title('Histogram');
+
+figure('Name','Autocorrelation and power density spectrum between Icognition and Burnout Pressure');
 %find the best polynom to recreate curve during burntime:
 riseTime = 6;
 decayTime = 3;
 p_brn = polyfit(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,2),2);
 p_brn_curve = polyval(p_brn,log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1));
-p_var_brn = sum((log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,2)-p_brn_curve).^2)/(T_brn_ind-decayTime-(T_ico_ind+riseTime)-1);
+p_var_brn = var(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,2)-p_brn_curve);
 
 %For checking purpose:
+subplot(4,1,1);
 plot(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,2),log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),p_brn_curve);
+title('Poly vs real');
 
+% Bandwith
+p_noise_brn = log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,2)-p_brn_curve;
+pcorr_brn = xcorr(p_noise_brn);
+N = length(pcorr_brn);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],pcorr_brn);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(pcorr_brn) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(pcorr_brn),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(p_noise_brn);
+title('Histogram');
+
+figure('Name','Autocorrelation and power density spectrum after Burnout Pressure');
 %find the best polynom to recreate curve during upflight:
 riseTime = 3;
 decayTime = 20;
 p_upflight = polyfit(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2),2);
 p_upflight_curve =polyval(p_upflight,log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1));
-p_var_upflight = sum((log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve).^2)/(T_par_ind-decayTime-(T_brn_ind+riseTime)-1);
+p_var_upflight = var(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve);
 
 %For checking purpose:
-%plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
+subplot(4,1,1);
+plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
+title('Poly vs real');
 
+% Bandwith
+p_noise_upflight = log_press(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve;
+pcorr_upflight = xcorr(p_noise_upflight);
+N = length(pcorr_upflight);
+subplot(4,1,2);
+plot([-N/2:N/2-1],pcorr_upflight);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(pcorr_upflight) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(pcorr_upflight),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(p_noise_upflight);
+title('Histogram');
 
 %% Same for Barometer Temperature:
 
+figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Temperatur');
 decayTime = 3;
-T_mean = sum(log_temp(1:T_ico_ind-decayTime,2))/(T_ico_ind-decayTime);
-T_var_preIco  = sum((log_temp(1:T_ico_ind-decayTime,2)-T_mean).^2)/(T_ico_ind-decayTime-1);
+p_preIco = polyfit(log_press(1:T_ico_ind-decayTime,1),log_temp(1:T_ico_ind-decayTime,2),2);
+p_preIco_curve = polyval(p_preIco,log_press(1:T_ico_ind-decayTime,1));
+T_var_preIco = var(log_temp(1:T_ico_ind-decayTime,2)-p_preIco_curve);
+%T_mean = sum(log_temp(1:T_ico_ind-decayTime,2))/(T_ico_ind-decayTime);
+%T_var_preIco  = sum((log_temp(1:T_ico_ind-decayTime,2)-T_mean).^2)/(T_ico_ind-decayTime-1);
+subplot(4,1,1);
+plot(log_temp(1:T_ico_ind-decayTime,1),log_temp(1:T_ico_ind-decayTime,2),log_temp(1:T_ico_ind-decayTime,1),p_preIco_curve);%ones(T_ico_ind-decayTime,1)*T_mean);
+
+% Bandwith
+T_noise_preIco = log_temp(1:T_ico_ind-decayTime,2)-p_preIco_curve;
+Tcorr_preIco = xcorr(T_noise_preIco);
+N = length(Tcorr_preIco);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],Tcorr_preIco);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(Tcorr_preIco) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(Tcorr_preIco),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(T_noise_preIco);
+title('Histogram');
+
+figure('Name','Autocorrelation and power density spectrum between Icognition and Burnout Temperatur');
 
 %find the best polynom to recreate curve during burntime:
 riseTime = 6;
 decayTime = 3;
 p_brn = polyfit(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime,2),2);
 p_brn_curve = polyval(p_brn,log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1));
-T_var_brn = sum((log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1)-p_brn_curve).^2)/(T_brn_ind-decayTime-(T_ico_ind+riseTime)-1);
+T_var_brn = var(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1)-p_brn_curve);
 
 %For checking purpose:
+subplot(4,1,1);
 plot(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime,2),log_press(T_ico_ind+riseTime:T_brn_ind-decayTime,1),p_brn_curve);
+
+% Bandwith
+T_noise_brn = log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime,2)-p_brn_curve;
+Tcorr_brn = xcorr(T_noise_brn);
+N = length(Tcorr_brn);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],Tcorr_brn);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(Tcorr_brn) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(Tcorr_brn),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(T_noise_brn);
+title('Histogram');
+
+figure('Name','Autocorrelation and power density spectrum after Burnout Temperatur');
 
 %find the best polynom to recreate curve during upflight:
 riseTime = 3;
 decayTime = 2;
 p_upflight = polyfit(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2),2);
 p_upflight_curve =polyval(p_upflight,log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1));
-T_var_upflight = sum((log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve).^2)/(T_par_ind-decayTime-(T_brn_ind+riseTime)-1);
+T_var_upflight = var(log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve);
 
 %For checking purpose:
-%plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
+subplot(4,1,1);
+plot(log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2),log_press(T_brn_ind+riseTime:T_par_ind-decayTime,1),p_upflight_curve);
 
+% Bandwith
+T_noise_upflight = log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upflight_curve;
+Tcorr_upflight = xcorr(T_noise_upflight);
+N = length(Tcorr_upflight);
+
+subplot(4,1,2);
+plot([-N/2:N/2-1],Tcorr_upflight);
+title('Autocorrelation');
+
+subplot(4,1,3);
+if length(Tcorr_upflight) < 2048
+    N = 2048;
+end
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(Tcorr_upflight),N))));
+ylabel('[dB]'), xlabel('Frequency in [Hz]');
+title('power density spectrum');
+
+subplot(4,1,4);
+histogram(T_noise_upflight);
+title('Histogram');
 
 %% State Estimation:
 
@@ -243,7 +465,7 @@ T_var_upflight = sum((log_temp(T_brn_ind+riseTime:T_par_ind-decayTime,2)-p_upfli
 
 A = [0 1 0 0 0; 0 0 1 0 0; 0 0 0 0 0;0 0 0 0 0;-0.00649 0 0 0 0];
 B = [0;0;0;0;0];
-C = [1 0 0 0 0; 0 0 1/9.81 -1/9.81 0;0 0 0 0 1];                                     % Input is Height out of Pressure, Acceloration and TemP
+C = [1 0 0 0 0; 0 0 1 -1 0;0 0 0 0 1];                                     % Input is Height out of Pressure, Acceloration and TemP
 D = [0];
 G = [0 0 0;0 0 0;1 0 0;0 1 0;0 0 1];
 
@@ -264,8 +486,8 @@ disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 %% Get to the neeeded Matrices:
 
 %Calculate noise of sensors out of the Roro Data befor icgnognitiona.
-Tico = 197;                 %Icoginition time point
-Burntime = 2.5; % [s]
+Tico = T_ico-0.002;                 %Icoginition time point
+Burntime = T_brn-T_ico; % [s]
 %Sensor Noise:
 k = 1;
 while TimeVec(k) < Tico
@@ -287,8 +509,8 @@ R = diag([2^32;MACL;2^32]);
 %Static System noise:
 HGT = 0;
 SPE = 0;
-ACEL = 0.001;
-ACELOFS = 0.001;
+ACEL = 0.10;
+ACELOFS = 0.00005;
 TMP = 0.005;
 %Q = diag([HGT;SPE;ACEL;ACELOFS;TMP]);
 Q = diag([ACEL;ACELOFS;TMP]);
@@ -340,7 +562,7 @@ for k = 1:length(TimeVec)
     else
         if TimeVec(k) > Tico & TimeVec(k) < Tico + Burntime
             %P = Ad*P*Ad' + Gd'*diag([HGT;SPE;ACEL;0;TMP])*Gd; 
-            P = Ad*P*Ad' + Gd*diag([ACEL*1000;ACELOFS/10;TMP])*Gd'; 
+            P = Ad*P*Ad' + Gd*diag([ACEL*100000;ACELOFS;TMP])*Gd'; 
         else
             P = Ad*P*Ad' + Gd*Q*Gd'; 
         end
@@ -367,7 +589,7 @@ for k = 1:length(TimeVec)
     end
     K = P*C'*pinv(C*P*C' + diag([TempMPRS;TempMACL;TempMTMP]));
     
-    x = x + K*([Height;az(k);Temp] - C*x);
+    x = x + K*([Height;acc_mes(k);Temp] - C*x);
     P = (eye(5)-K*C)*P;
     
     x_est_loop(:,k) = x;                            %Save data from the Sensor fusion
@@ -385,7 +607,7 @@ plot(TimeVec,x_est_loop(1,:));
 plot(TimeVecPress,hnew);
 plot(TimeVec,x_est_loop(2,:));
 plot(TimeVec,x_est_loop(3,:));
-plot(log_time,az*9.81);
+plot(log_time,az);
 plot(TimeVec,x_est_loop(4,:));
 plot(TimeVec,x_est_loop(5,:));
 plot(TimeVecPress,log_temp(:,2));
