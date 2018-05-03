@@ -51,7 +51,6 @@ load('StateSimu.mat')
 
 % Get the heigth vector from the ARIS simulation.
 h = state(:,3)';
-%h = interp(hvec,5);
 
 % plot it
 figure('Name','Real Data')
@@ -126,48 +125,87 @@ legend('Real height in z','GPS heigt in z','Real Acceloration','Assumed Temperat
 hold off;
 
 %% Add noise to sensor data
+% Load the AR models of the different noises
+load('h_a.mat');
 
-T_var_brn = 8.4040e-04;
-p_var_brn = 1.7034;
-p2_var_brn = p_var_brn * 2;
-p_var_upflight = 0.7034;
-p2_var_upflight = p_var_upflight * 2;
-a_var_brn = 0.0128;
-a_var_upflight = 0.0028;
+
+% T_var_brn = 8.4040e-04;
+% p_var_brn = 1.7034;
+%p2_var_brn = p_var_brn * 2;
+% p_var_upflight = 0.7034;
+%p2_var_upflight = p_var_upflight * 2;
+% a_var_brn = 0.0128;
+% a_var_upflight = 0.0028;
 aofst_var_brn = 0.0001;
+aofst_var_upflight = 0.0001;
 GPS_var = 0.1;
 
 % with EPFL data
 %load('sensorNoiseTir2.mat')
 %load('sensorNoiseTir1.mat')
 
-% Temperatur
-T_mes = T + randn(1,length(T)).*sqrt(T_var_brn);
+% Find burnout index
+k = 20;
+while a(k) > 20
+    k = k+1;
+end
+T_brn_ind = k;
+
 
 % Acceleloration > Add a offset and more noise if while the motor is
 % burning
 a_mes = zeros(1,length(a));
 a_offset = 4;
+% Generate noiese Vecotrs:
+a_noise_brn = filter(1,h_brn,randn(1,T_brn_ind) * sqrt(varBrn));
+aofst_noise_brn = filter(1,h_brn,randn(1,T_brn_ind) * sqrt(aofst_var_brn));
+a_noise_upflight = filter(1,h_upflight,randn(1,length(a)-T_brn_ind) * sqrt(varUpflight));
+aofst_noise_upflight = filter(1,h_upflight,randn(1,length(a)-T_brn_ind) * sqrt(aofst_var_upflight));
+
 for k = 1:length(a)
-    if a(k) > 20
-    a_mes(k) = a(k) + randn * sqrt(a_var_brn) + (a_offset + randn*aofst_var_brn);
-    else
-    a_mes(k) = a(k) + randn * sqrt(a_var_upflight) + (a_offset + randn*aofst_var_brn);    
-    end
+     if k <= T_brn_ind
+     a_mes(k) = a(k) + a_noise_brn(k) + a_offset + aofst_noise_brn(k);
+     else
+     a_mes(k) = a(k) + a_noise_upflight(k-T_brn_ind) + a_offset + aofst_noise_upflight(k-T_brn_ind);    
+     end
 end
 
+load('h_p.mat');
+p2_var_brn = varBrn * 2;
+p2_var_upflight = varUpflight * 2;
 % Pressure -> more noise if the motor is burning
+p_noise_brn = filter(1,h_brn,randn(1,T_brn_ind) * sqrt(varBrn));
+p2_noise_brn = filter(1,h_brn,randn(1,T_brn_ind) * sqrt(p2_var_brn));
+p_noise_upflight = filter(1,h_upflight,randn(1,length(a)-T_brn_ind) * sqrt(varUpflight));
+p2_noise_upflight = filter(1,h_upflight,randn(1,length(a)-T_brn_ind) * sqrt(p2_var_upflight));
+
 for k = 1:length(a)
-    if a(k) > 20
-    p_mes_1 = p + randn(1,length(P1)).*sqrt(p_var_brn);
-    p_mes_2 = p + randn(1,length(P2)).*sqrt(p2_var_brn);
+    if k <= T_brn_ind
+    p_mes_1(k) = p(k) + p_noise_brn(k);
+    p_mes_2(k) = p(k) + p2_noise_brn(k);
     else
-    p_mes_1 = p + randn(1,length(P1)).*sqrt(p_var_upflight);
-    p_mes_2 = p + randn(1,length(P2)).*sqrt(p2_var_upflight);    
+    p_mes_1(k) = p(k) + p_noise_upflight(k-T_brn_ind);
+    p_mes_2(k) = p(k) + p2_noise_upflight(k-T_brn_ind);
     end
 end
 % GPS
 h_mes_GPS = h_GPS + randn(1,length(h_GPS)).*sqrt(GPS_var);
+
+
+% Temperatur
+load('h_T.mat');
+T_noise_brn = filter(1,h_brn,randn(1,T_brn_ind) * sqrt(varBrn));
+T_noise_upflight = filter(1,h_upflight,randn(1,length(a)-T_brn_ind) * sqrt(varUpflight));
+
+
+for k = 1:length(a)
+    if k <= T_brn_ind
+    T_mes(k) = T(k) + T_noise_brn(k);
+    else
+    T_mes(k) = T(k) + T_noise_upflight(k-T_brn_ind);
+    end
+end
+%T_mes = T + randn(1,length(T)).*sqrt(T_var_brn);
 
 % T_mes = awgn(T,40,'measured');
 % h_mes_GPS = awgn(h_GPS,80,'measured');
@@ -522,11 +560,11 @@ xlabel('Time [s]');
 
 %% Difference between estimation and ground truth
 diff = abs(h-x_est_loop(1,:));
-display(['Loop 1 "Normal" Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+display(['Loop 1 "Normal" Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 diff = abs(h-x_est_loop2(1,:));
-display(['Loop 2 Acceloration with offset Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+display(['Loop 2 Acceloration with offset Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 diff = abs(h-x_est_loop3(1,:));
-display(['Loop 3 Pressure as height Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' average difference:' num2str(sum(diff)/length(diff))]);
+display(['Loop 3 Pressure as height Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 
 
 % %%
