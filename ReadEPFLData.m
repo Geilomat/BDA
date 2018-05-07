@@ -1,10 +1,7 @@
-clear all; clc; close all; % remove that
+clear all; clc; close all;
 % Sensordata
-% seqNmbr time altitude airspeed pressure temp ax ay az gx gy gz gx gy gz
-% GPS data
-% empty time number of sats hdop lat lon altitude
-hasGPS = false;
 
+hasGPS = false;
 log_time = [];     % Time of IMO sample: synch. with gyro/accel Nx[s]
 log_imu_a = [];     % Accelerometer: Accels    ax, ay, az  Nx3*[g]
 log_imu_g = [];     % Gyroscope, Angular rates gx, gy, gz  Nx3*[°/s]
@@ -13,15 +10,16 @@ log_press = [];     % Pressure sensor:[time[s], pressure[hPa], airspeed]
 log_h     = [];     % Nx[time altituded]
 log_airspeed = [];  % [airspeed]
 
+fname = 'none';
 % Open log file uncomment for different Flights.
 %load('Tir_test3d2_Paths.mat');
 %fname = 'Tir2noise.mat';
 %load('Tir_test3d1_Paths.mat');
 %fname = 'Tir1noise.mat';
-load('18_11_18_Eric_Paths.mat');
-fname = 'Ericnoise.mat';
-%load('18_11_18_Greg_Paths.mat');
-%fname = 'Gregnoise.mat';
+%load('18_11_18_Eric_Paths.mat');
+%fname = 'Ericnoise.mat';
+load('18_11_18_Greg_Paths.mat');
+fname = 'Gregnoise.mat';
 
 if hasGPS
     log_GPS_time = [];
@@ -51,11 +49,7 @@ end
         else
             % Read line of logfile
             [data, num, err, ind1] = sscanf(Line, '%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f', 15);
-            %sample_time = data(2); 
-            %if(sample_time > 185 & sample_time < 300)
-            %sample_id = char(data(2)); 
             log_time = [log_time; data(2)];
-            %log_data = [log_data; data(3:end)'];
             log_h = [log_h;data(3)];
             log_airspeed = [log_airspeed; data(4)];
             log_press = [log_press; data(5)];
@@ -124,16 +118,18 @@ anglez = zeros(length(log_time),1);
 
 for k = 2:length(log_time)
     dT = log_time(k) - log_time(k-1);
-    anglex(k) = anglex(k-1) + ((log_imu_g(k,1)-log_imu_g(k-1,1))/2)*dT;
-    angley(k) = angley(k-1) + ((log_imu_g(k,2)-log_imu_g(k-1,2))/2)*dT;
-    anglez(k) = anglez(k-1) + ((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
+    anglex(k) = anglex(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,1)-log_imu_g(k-1,1))/2)*dT;
+    angley(k) = angley(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,2)-log_imu_g(k-1,2))/2)*dT;
+    anglez(k) = anglez(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
 end
 
+anglex = anglex/100;
+angley = angley/100;
 axx = log_imu_a(:,1) .* cos(anglex*pi/180)*9.81;
 axy = log_imu_a(:,1) .* cos(angley*pi/180)*9.81;
 axz = log_imu_a(:,1) .* cos(anglez*pi/180)*9.81;
-ayx = log_imu_a(:,2) .* cos(anglex*pi/180)*9.81;
-ayy = log_imu_a(:,2) .* cos(angley*pi/180)*9.81;
+ayx = log_imu_a(:,2) .* -cos(anglex*pi/180)*9.81;
+ayy = log_imu_a(:,2) .* -cos(angley*pi/180)*9.81;
 ayz = log_imu_a(:,2) .* cos(anglez*pi/180)*9.81;
 azx = log_imu_a(:,3) .* cos(anglex*pi/180)*9.81;
 azy = log_imu_a(:,3) .* cos(angley*pi/180)*9.81;
@@ -175,7 +171,7 @@ hold off;
 
 %% Find Icongnition Time und Burnduration:
 %declare which acceloration vecort should be used
-acc_mes = axx;
+acc_mes = ayy;
 
 T_ico_ind = 1; %Icogntiono Time index
 while acc_mes(T_ico_ind) < 20
@@ -209,6 +205,7 @@ figure('Name','Polyfit,Autocorrelation and power density spectrum before icognit
 % Mean and Variance before icognition
 decayTime = 10;
 riseTime = 1;
+a_T_preIco = log_time(riseTime:T_ico_ind-decayTime);
 a_mean = mean(acc_mes(riseTime:T_ico_ind-decayTime));
 a_var_preIco  = var(acc_mes(riseTime:T_ico_ind-decayTime));
 
@@ -239,8 +236,9 @@ title('Histogram');
 % fing the best polynom to recreate curve during burntime:
 figure('Name','Autocorrelation and Leistungsdichtespektrum between Icognition and Burnout');
 riseTime = 10;
-decayTime = 3;
-p_brn = polyfit(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
+decayTime = 5;
+a_T_brn = log_time(T_ico_ind+riseTime:T_brn_ind-decayTime);
+p_brn = polyfit(a_T_brn,acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
 p_brn_curve = polyval(p_brn,log_time(T_ico_ind+riseTime:T_brn_ind-decayTime));
 a_var_brn = var(acc_mes(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve);
 
@@ -270,9 +268,10 @@ title('Histogram');
 
 % fing the best polynom to recreate curve during upflight:
 figure('Name','Autocorrelation and Leistungsdichtespektrum after Burnout');
-riseTime = 20;
-decayTime = 20;
-p_upflight = polyfit(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime),2);
+riseTime = 10;
+decayTime = 15;
+a_T_upflight = log_time(T_brn_ind+riseTime:T_par_ind-decayTime);
+p_upflight = polyfit(a_T_upflight,acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime),2);
 p_upflight_curve =polyval(p_upflight,log_time(T_brn_ind+riseTime:T_par_ind-decayTime));
 a_var_upflight = var(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 
@@ -304,6 +303,8 @@ title('Histogram');
 figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Pressure');
 
 decayTime = 3;
+riseTime = 1;
+p_T_preIco = log_time(riseTime:T_ico_ind-decayTime);
 p_mean = mean(log_press(1:T_ico_ind-decayTime));
 p_var_preIco = var(log_press(1:T_ico_ind-decayTime));
 
@@ -336,7 +337,8 @@ figure('Name','Autocorrelation and power density spectrum between Icognition and
 %find the best polynom to recreate curve during burntime:
 riseTime = 6;
 decayTime = 3;
-p_brn = polyfit(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),log_press(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
+p_T_brn = log_time(T_ico_ind+riseTime:T_brn_ind-decayTime);
+p_brn = polyfit(p_T_brn,log_press(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
 p_brn_curve = polyval(p_brn,log_time(T_ico_ind+riseTime:T_brn_ind-decayTime));
 p_var_brn = var(log_press(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve);
 
@@ -370,7 +372,8 @@ figure('Name','Autocorrelation and power density spectrum after Burnout Pressure
 %find the best polynom to recreate curve during upflight:
 riseTime = 3;
 decayTime = 20;
-p_upflight = polyfit(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),log_press(T_brn_ind+riseTime:T_par_ind-decayTime),2);
+p_T_upflight = log_time(T_brn_ind+riseTime:T_par_ind-decayTime);
+p_upflight = polyfit(p_T_upflight,log_press(T_brn_ind+riseTime:T_par_ind-decayTime),2);
 p_upflight_curve =polyval(p_upflight,log_time(T_brn_ind+riseTime:T_par_ind-decayTime));
 p_var_upflight = var(log_press(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 
@@ -403,6 +406,7 @@ title('Histogram');
 figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Temperatur');
 decayTime = 3;
 riseTime = 1;
+T_T_preIco = log_time(riseTime:T_ico_ind-decayTime);
 p_preIco = polyfit(log_time(riseTime:T_ico_ind-decayTime),log_temp(riseTime:T_ico_ind-decayTime),2);
 p_preIco_curve = polyval(p_preIco,log_time(riseTime:T_ico_ind-decayTime));
 T_var_preIco = var(log_temp(riseTime:T_ico_ind-decayTime)-p_preIco_curve);
@@ -437,7 +441,8 @@ figure('Name','Autocorrelation and power density spectrum between Icognition and
 %find the best polynom to recreate curve during burntime:
 riseTime = 6;
 decayTime = 3;
-p_brn = polyfit(log_time(T_ico_ind+riseTime:T_brn_ind-decayTime),log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
+T_T_brn = log_time(T_ico_ind+riseTime:T_brn_ind-decayTime);
+p_brn = polyfit(T_T_brn,log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime),2);
 p_brn_curve = polyval(p_brn,log_time(T_ico_ind+riseTime:T_brn_ind-decayTime));
 T_var_brn = var(log_temp(T_ico_ind+riseTime:T_brn_ind-decayTime)-p_brn_curve);
 
@@ -471,7 +476,8 @@ figure('Name','Autocorrelation and power density spectrum after Burnout Temperat
 %find the best polynom to recreate curve during upflight:
 riseTime = 3;
 decayTime = 2;
-p_upflight = polyfit(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),log_temp(T_brn_ind+riseTime:T_par_ind-decayTime),2);
+T_T_upflight = log_time(T_brn_ind+riseTime:T_par_ind-decayTime);
+p_upflight = polyfit(T_T_upflight,log_temp(T_brn_ind+riseTime:T_par_ind-decayTime),2);
 p_upflight_curve =polyval(p_upflight,log_time(T_brn_ind+riseTime:T_par_ind-decayTime));
 T_var_upflight = var(log_temp(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 
@@ -534,10 +540,15 @@ title('Histogram');
 % Gyrometer
 
 % Barometer
-
+for k = 2:length(log_time)
+   Taus(k-1) = log_time(k) - log_time(k-1);
+end
+dT = median(Taus)
 % save data into m file.
-%save(fname, 'a_noise_preIco','a_noise_brn','a_noise_upflight','a_var_brn','a_var_preIco','a_var_upflight','acorr_brn','acorr_preIco','acorr_upflight','p_noise_preIco','p_noise_brn','p_noise_upflight','p_var_brn','p_var_preIco','p_var_upflight','pcorr_brn','pcorr_preIco','pcorr_upflight','T_noise_preIco','T_noise_brn','T_noise_upflight','T_var_brn','T_var_preIco','T_var_upflight','Tcorr_brn','Tcorr_preIco','Tcorr_upflight');
-
+if ~strcmp(fname,'none')
+    save(fname, 'a_noise_preIco','a_noise_brn','a_noise_upflight','a_var_brn','a_var_preIco','a_var_upflight','acorr_brn','acorr_preIco','acorr_upflight','p_noise_preIco','p_noise_brn','p_noise_upflight','p_var_brn','p_var_preIco','p_var_upflight','pcorr_brn','pcorr_preIco','pcorr_upflight','T_noise_preIco','T_noise_brn','T_noise_upflight','T_var_brn','T_var_preIco','T_var_upflight','Tcorr_brn','Tcorr_preIco','Tcorr_upflight','dT','a_T_preIco','a_T_brn','a_T_upflight','p_T_preIco','p_T_brn','p_T_upflight','T_T_preIco','T_T_brn','T_T_upflight');
+    disp(['data saved into: ' fname]);
+end
 %% Path generation
 %clear all;
 %hasGPS = true;

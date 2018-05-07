@@ -104,18 +104,21 @@ plot(log_time,log_imu_a(:,2));
 
 % Integrate the angle
 angle = zeros(length(log_time),1);
+angleSpeedOffstet = mean(log_imu_g(1:500,1));
+angleSpeed = log_imu_g(:,1) - angleSpeedOffstet;
 %angle(1) = 0;
 for k = 2:length(log_time)
     dT = log_time(k) - log_time(k-1);
-    angle(k) = angle(k-1) + ((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
+    angle(k) = angle(k-1) + angleSpeed(k-1) *dT + ((angleSpeed(k)-angleSpeed(k-1))/2)*dT;
 end
 
 %newAngle = filter(0.999,[1 1-0.999],log_imu_g(:,1));
 %angle = cumsum(log_imu_g(:,3));
 %a_mes = log_imu_a(:,3).*-cos(angle*pi/180);%log_imu_g(:,3)*pi/180);
-az = log_imu_a(:,3).*-cos(angle*pi/180)*9.81;
+az = log_imu_a(:,2).*-cos(angle*pi/180)*9.81;
 plot(log_time,az);
 plot(log_time,angle)
+legend('height','accel a 3','az calculated','angle');
 hold off;
 
 %% Find Icongnition Time und Burnduration:

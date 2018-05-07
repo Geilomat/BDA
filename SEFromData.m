@@ -5,23 +5,32 @@ clear all; close all;
 
 
 %% Initalize the System
+disp('System 1 with x1 = Height,x2 = Velocity,x3 = Acceloration,x4 = Pressure,x5 = Temp,6 = Temp_dot');
+
 
 % x1 = Height, x2 = Velocity,x3 = Acceloration, x4 = Pressure, x5 = Temp,
 % x6 = Temp_dot
 % Tempteratur at start = 15 C° -> 288.15 K°
 load('PressLookUp.mat')
 
-A = [0 1 0 0 0 0;0 0 1 0 0 0; 0 0 0 0 0 0;0 PressLookUp(1,1) 0 0 0 PressLookUp(2,1);0 0 0 0 0 1;0 0 0 0 0 0];
+A = [0 1 0 0 0 0;
+    0 0 1 0 0 0; 
+    0 0 0 0 0 0;
+    0 PressLookUp(2,1) 0 0 0 PressLookUp(1,1);
+    0 0 0 0 0 1;
+    0 0 0 0 0 0];
 B = [0;0;0;0;0;0];                %No direct input
-C = [1 0 0 0 0 0;0 0 1 0 0 0;0 0 0 1 0 0;0 0 0 1 0 0;0 0 0 0 1 0];          %Output ist Height and Acceleration
+C = [1 0 0 0 0 0;
+    0 0 1 0 0 0;
+    0 0 0 1 0 0;
+    0 0 0 1 0 0;
+    0 0 0 0 1 0];          %Output ist Height and Acceleration
 D = [0];
 G = [0 0 0;0 0 0;1 0 0 ;0 1 0;0 0 0;0 0 1];                %System noise only on acceloration
 
-
-
 % Get the time vector from the ARIS simulation.
 %load('TimeFromHassan.mat');
-load('TimeSimu.mat')
+load('RoroState.mat')
 % Interpolate to get to 1 ms sampling time.
 TimeVec = t';
 Tau = TimeVec(end)/length(TimeVec);
@@ -38,23 +47,20 @@ Ad = expm(A*Tau);
 Gd = Ad * G;
 Bd = Ad * B;
 
-% Dummy vairable for Simualation
-simin = zeros(1,length(TimeVec));
-
 disp(['Size of A: ' num2str(size(A))]);
 
 %% Observability test;
 disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 
 %% Read sensor Data
-load('StateSimu.mat')
+%load('StateSimu.mat')
 
 % Get the heigth vector from the ARIS simulation.
 h = state(:,3)';
 
 % plot it
 figure('Name','Real Data')
-plot(TimeVec,h,'b') %%Original bahn
+plot(TimeVec,h,'b')             %Original trajectory
 legend('Real height in z');
 
 
@@ -63,11 +69,12 @@ legend('Real height in z');
 figure('Name','Real Data');
 % get acceloration by differentiate height:
 v = diff(h)/(Tau);
-a = diff(v)/(Tau);
+%a = diff(v)/(Tau);
 % Ad zeros to maintain vector length
-v = [v 0];
-a = [a 0 0];
-
+v = [v v(end)];
+%a = [a a(end) a(end)];
+anew = resample(imu_a(:,3),imu_t,1000);
+a = anew(1:length(h))';
 % get height of GPS by deleting engouh values so it becomes 5Hz sample rate
 % and then ad Zero Order Hold to get static value
 GPSTau = 1;
@@ -85,11 +92,10 @@ end
 T0 = 15 + 273.15;
 T = T0 - 0.00649*h;
 
-
 % Get Barometric Data (pressure)
 % Pressure Data Temp/Po are just assumptions !!!!
 Po = 1013.25;    %Pressure at altitude 0
-p = Po*(1-(0.0065*h)./T).^5.255;
+p = Po*(1-(0.0065*h)./T0).^5.255;
 
 %P1 Has less noise Therefore samples slower
 P1Tau = 1/50;
@@ -127,7 +133,6 @@ hold off;
 %% Add noise to sensor data
 % Load the AR models of the different noises
 load('h_a.mat');
-
 
 % T_var_brn = 8.4040e-04;
 % p_var_brn = 1.7034;
@@ -188,8 +193,11 @@ for k = 1:length(a)
     p_mes_2(k) = p(k) + p2_noise_upflight(k-T_brn_ind);
     end
 end
+
 % GPS
-h_mes_GPS = h_GPS + randn(1,length(h_GPS)).*sqrt(GPS_var);
+load('h_GPS.mat');
+
+h_mes_GPS = h_GPS + filter(1,h_upflight,randn(1,length(h_GPS)).*sqrt(varUpflight));
 
 
 % Temperatur
@@ -375,6 +383,7 @@ xlabel('Time [s]');
 
 %% Loop 2
 % Initalize the System
+disp('System 2 with x1 = Height,x2 = Velocity,x3 = Acceloration,x4 = aoffset x5 = Pressure,x6 = Temp,x7 = Temp_dot')
 
 % x1 = Height, x2 = Velocity,x3 = Acceloration,x4 = aoffset x5 = Pressure
 % x6 = Temp, x7 = Temp_dot
@@ -385,12 +394,12 @@ A = [0 1 0 0 0 0 0;
     0 0 1 0 0 0 0;
     0 0 0 0 0 0 0;
     0 0 0 0 0 0 0;
-    0 PressLookUp(1,1) 0 0 0 0 PressLookUp(2,1);
+    0 PressLookUp(2,1) 0 0 0 0 PressLookUp(1,1);
     0 0 0 0 0 0 1;
     0 0 0 0 0 0 0];
 B = [0;0;0;0;0;0;0];                %No direct input
 C = [1 0 0 0 0 0 0;
-    0 0 1 -1 0 0 0;
+    0 0 1 1 0 0 0;
     0 0 0 0 1 0 0;
     0 0 0 0 1 0 0;
     0 0 0 0 0 1 0];          %Output ist Height, Pressures and Temperature
@@ -423,7 +432,7 @@ disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
 HGT = 0;
 SPE = 0;
 ACEL = 70;
-ACELOFS = 0.01;
+ACELOFS = 0.0001;
 PRE = 0.1;
 TMP = 0;
 DTMP = 0.1;
@@ -432,7 +441,7 @@ Q = diag([ACEL;ACELOFS;PRE;TMP;DTMP]);
 %Dynamic Sytem noise:
 HGT = ones(1,length(TimeVec))*0;
 SPE = ones(1,length(TimeVec))*0;
-ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*10];
+ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*.1];
 ACELOFS = ones(1,length(TimeVec))*ACELOFS;
 PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.7 zeros(1,10)];         %Due to linearization it gets less accurate in the middle
 TMP = ones(1,length(TimeVec))*0;
@@ -491,11 +500,26 @@ xlabel('Time [s]');
 
 
 %% Loop 3
-A = [0 1 0 0;0 0 1 0; 0 0 0 0;-0.00649 0 0 0];
-B = [0;0;0;0];                %No direct input
-C = [1 0 0 0;1 0 0 0;1 0 0 0;0 0 1 0;0 0 0 1];          %Output ist Height and Acceleration
+disp('System 3 with x1=Height,x2=Speed,x3=Acceleration,x4=Acceleration Offset,x5=Temperature');
+% Initialize the system
+
+A = [0 1 0 0 0;
+    0 0 1 0 0;
+    0 0 0 0 0;
+    0 0 0 0 0;
+    -0.000649 0 0 0 0];
+B = [0;0;0;0;0];                %No direct input
+C = [1 0 0 0 0;
+    0 0 1 -1 0;
+    1 0 0 0 0;
+    1 0 0 0 0;
+    0 0 0 0 1];          
 D = [0];
-G = [0;0;1;0];                %System noise only on acceloration
+G = [0 0;
+    0 0;
+    1 0;
+    0 1;
+    0 0];                %System noise only on acceloration
 
 
  %Diskretierung der Systemmatritzen
@@ -503,19 +527,28 @@ Ad = expm(A*Tau);
 Gd = Ad * G;
 Bd = Ad * B;
 
-Q_dyn = [HGT;SPE;ACEL;TMP];  
+disp(['Size of A: ' num2str(size(A))]);
 
+%% Observability test;
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
+
+%% System noise implementation
+
+%Q_dyn = [HGT;SPE;ACEL;TMP];  
+Q_dyn = [ACEL;ACELOFS];
 %Add all noise vectors into an noise matrix
 Q_dyn_m = diag(Q_dyn(:,1)');
 for n = 2:length(TimeVec)
     Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
 end
 
+%% Loop initialization and loop
+
 u = zeros(1,length(TimeVec));                       %Input vector is zero
 y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2;T_mes];        %Output are the measurements
 y_t = timeseries(y,TimeVec);
-x = [0;0;0;T(1)];                              %Start Vector should be like this
-P = eye(4);                                         %Standart can maybe be increased
+x = [0;0;0;0;T(1)];                                   %Start Vector should be like this
+P = eye(5);                                         %Standart can maybe be increased
 Height1 = 0;
 Height2 = 0;
 Temp = T(1);
@@ -525,16 +558,16 @@ x_est_loop3 = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
 disp('Loop 3 start..');
 for k = 1:length(TimeVec)
     K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
-    Height1 = CalcHeight(Po,p_mes_1(k),T_mes(k),0,true);
-    Height2 = CalcHeight(Po,p_mes_2(k),T_mes(k),0,true);
+    Height1 = CalcHeight(Po,p_mes_1(k),T0,0,true);
+    Height2 = CalcHeight(Po,p_mes_2(k),T0,0,true);
     Temp = T_mes(k);
-    x = x + K*([h_mes_GPS(k);Height1;Height2;a_mes(k);Temp] - C*x);
-    P = (eye(4)-K*C)*P;
+    x = x + K*([h_mes_GPS(k);a_mes(k);Height1;Height2;Temp] - C*x);
+    P = (eye(5)-K*C)*P;
     
     x_est_loop3(:,k) = x;                            %Save data from the Sensor fusion
     
     x = Ad*x + Bd*u(k);
-    P = Ad*P*Ad' + Q_dyn_m(:,:,k); %Gd*Q*Gd';
+    P = Ad*P*Ad' + Gd*Q_dyn_m(:,:,k)*Gd'; %Gd*Q*Gd';
 
 end
 disp('...finished!');
@@ -551,22 +584,379 @@ plot(TimeVec,v);
 plot(TimeVec,x_est_loop3(2,:));
 plot(TimeVec,a);
 plot(TimeVec,x_est_loop3(3,:));
-plot(TimeVec,p);
 plot(TimeVec,x_est_loop3(4,:));
+plot(TimeVec,T);
+plot(TimeVec,x_est_loop3(5,:));
 hold off;
-legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','real pressure','estimated pressure');
+legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','acceloration offset','real temperature','estimated temperature');
 ylabel('height & speed & accelaration & pressure');
 xlabel('Time [s]');
 
-%% Difference between estimation and ground truth
+%% Loop 4 Without Temperature
+
+disp('System 4 with x1=Height,x2=Speed,x3=Acceleration,x4=Acceleration Offset');
+% Initialize the system
+
+A = [0 1 0 0 ;
+    0 0 1 0 ;
+    0 0 0 0 ;
+    0 0 0 0] ;
+B = [0;0;0;0];                %No direct input
+C = [1 0 0 0;
+    0 0 1 -1;
+    1 0 0 0;
+    1 0 0 0];         
+D = [0];
+G = [0 0;
+    0 0;
+    1 0;
+    0 1];
+
+
+ %Diskretierung der Systemmatritzen
+Ad = expm(A*Tau);     
+Gd = Ad * G;
+Bd = Ad * B;
+
+disp(['Size of A: ' num2str(size(A))]);
+
+%% Observability test;
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
+
+%% System noise implementation
+
+Q_dyn = [ACEL;ACELOFS];
+%Add all noise vectors into an noise matrix
+Q_dyn_m = diag(Q_dyn(:,1)');
+for n = 2:length(TimeVec)
+    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+end
+
+%Add all noise vectors into an noise matrix
+R_dyn = [GPSvar;ACLvar;BM1var;BM2var];
+R_dyn_m = diag(R_dyn(:,1)');
+for n = 2:length(TimeVec)
+    R_dyn_m = cat(3,R_dyn_m,diag(R_dyn(:,n)'));
+end
+R_dyn_t = timeseries(R_dyn,TimeVec);
+
+
+%% Loop initialization and loop
+
+u = zeros(1,length(TimeVec));                       %Input vector is zero
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2];        %Output are the measurements
+y_t = timeseries(y,TimeVec);
+x = [0;0;0;0];                                   %Start Vector should be like this
+P = eye(4);                                         %Standart can maybe be increased
+Height1 = 0;
+Height2 = 0;
+Temp = T(1);
+
+
+x_est_loop4 = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
+disp('Loop 4 start..');
+for k = 1:length(TimeVec)
+    K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
+    Height1 = CalcHeight(Po,p_mes_1(k),T0,0,true);
+    Height2 = CalcHeight(Po,p_mes_2(k),T0,0,true);
+    Temp = T_mes(k);
+    x = x + K*([h_mes_GPS(k);a_mes(k);Height1;Height2]- C*x);
+    P = (eye(4)-K*C)*P;
+    
+    x_est_loop4(:,k) = x;                            %Save data from the Sensor fusion
+    
+    x = Ad*x + Bd*u(k);
+    P = Ad*P*Ad' + Gd*Q_dyn_m(:,:,k)*Gd'; %Gd*Q*Gd';
+
+end
+disp('...finished!');
+
+%% Plot
+
+figure('Name','Real flight vs estimation Self calculated System 4');
+plot(TimeVec,h);
+grid on;
+hold on;
+plot(TimeVec,x_est_loop4(1,:)); 
+plot(TimeVec,x_est_loop(1,:));
+plot(TimeVec,v);
+plot(TimeVec,x_est_loop4(2,:));
+plot(TimeVec,a);
+plot(TimeVec,x_est_loop4(3,:));
+plot(TimeVec,x_est_loop4(4,:));
+hold off;
+legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','acceloration offset');
+ylabel('height & speed & accelaration & pressure');
+xlabel('Time [s]');
+
+
+%% Loop 5 Without Temperature and GPS
+
+disp('System 5 with x1=Height,x2=Speed,x3=Acceleration,x4=Acceleration Offset and without GPS');
+% Initialize the system
+
+A = [0 1 0 0 ;
+    0 0 1 0 ;
+    0 0 0 0 ;
+    0 0 0 0] ;
+B = [0;0;0;0];                %No direct input
+C = [0 0 1 -1;
+    1 0 0 0;
+    1 0 0 0];         
+D = [0];
+G = [0 0;
+    0 0;
+    1 0;
+    0 1];
+
+
+ %Diskretierung der Systemmatritzen
+Ad = expm(A*Tau);     
+Gd = Ad * G;
+Bd = Ad * B;
+
+disp(['Size of A: ' num2str(size(A))]);
+
+%% Observability test;
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
+
+%% System noise implementation
+
+Q_dyn = [ACEL;ACELOFS];
+%Add all noise vectors into an noise matrix
+Q_dyn_m = diag(Q_dyn(:,1)');
+for n = 2:length(TimeVec)
+    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+end
+
+%Add all noise vectors into an noise matrix
+R_dyn = [ACLvar;BM1var;BM2var];
+R_dyn_m = diag(R_dyn(:,1)');
+for n = 2:length(TimeVec)
+    R_dyn_m = cat(3,R_dyn_m,diag(R_dyn(:,n)'));
+end
+R_dyn_t = timeseries(R_dyn,TimeVec);
+
+
+%% Loop initialization and loop
+
+u = zeros(1,length(TimeVec));                       %Input vector is zero
+y_t = timeseries(y,TimeVec);
+x = [0;0;0;0];                                   %Start Vector should be like this
+P = eye(4);                                         %Standart can maybe be increased
+Height1 = 0;
+Height2 = 0;
+Temp = T(1);
+
+
+x_est_loop5 = zeros(size(x,1),length(TimeVec));      %Vector for the SE values
+disp('Loop 5 start..');
+for k = 1:length(TimeVec)
+    K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
+    Height1 = CalcHeight(Po,p_mes_1(k),T0,0,true);
+    Height2 = CalcHeight(Po,p_mes_2(k),T0,0,true);
+    Temp = T_mes(k);
+    x = x + K*([a_mes(k);Height1;Height2]- C*x);
+    P = (eye(4)-K*C)*P;
+    
+    x_est_loop5(:,k) = x;                            %Save data from the Sensor fusion
+    
+    x = Ad*x + Bd*u(k);
+    P = Ad*P*Ad' + Gd*Q_dyn_m(:,:,k)*Gd'; %Gd*Q*Gd';
+
+end
+disp('...finished!');
+
+%% Plot
+
+figure('Name','Real flight vs estimation Self calculated System 4');
+plot(TimeVec,h);
+grid on;
+hold on;
+plot(TimeVec,x_est_loop5(1,:)); 
+plot(TimeVec,v);
+plot(TimeVec,x_est_loop5(2,:));
+plot(TimeVec,a);
+plot(TimeVec,x_est_loop5(3,:));
+plot(TimeVec,x_est_loop5(4,:));
+hold off;
+legend('real Height','estiamted Height','real Speed','estimated Speed','real acceloration','estimated acceloration','acceloration offset');
+ylabel('height & speed & accelaration & pressure');
+xlabel('Time [s]');
+
+%% Loop 6 Extended Kalmanfilter
+% Initalize the System
+disp('System 6 with x1 = Height,x2 = Velocity,x3 = Acceloration,x4 = aoffset x5 = Pressure,x6 = Temp,x7 = Temp_dot')
+% x1 = Height, x2 = Velocity,x3 = Acceloration,x4 = aoffset x5 = Pressure
+% x6 = Temp, x7 = Temp_dot
+% Tempteratur at start = 15 C° -> 288.15 K°
+load('PressLookUp.mat');
+
+A = [0 1 0 0 0 ;                %Height
+    0 0 1 0 0 ;                 %Speed
+    0 0 0 0 0 ;                 %Acceleration 
+    0 0 0 0 0 ;                 %Acceleration Offset
+    0 PressLookUp(2,1) 0 0 0];  %Pressure
+
+B = [0;0;0;0;0];                %No direct input
+
+C = [1 0 0 0 0;                 %GPS
+    0 0 1 1 0;                  %IMU Accelerometer
+    0 0 0 0 1;                  %Barometer 1
+    0 0 0 0 1;                  %Barometer 2
+    1 0 0 0 0 ];                %Height from the Pressure
+
+D = [0];
+
+G = [0 0 0 ;
+    0 0 0 ;
+    1 0 0 ;
+    0 1 0 ;
+    0 0 1 ;];                   %System noise on acceloration, acc offset, pressure an Tdot
+
+Sys = ss(A,B,C,D,Tau)
+
+Ad = expm(A*Tau);
+Gd = Ad * G;
+Bd = Ad * B;
+
+disp(['Size of A: ' num2str(size(A))]);
+
+%% Observability test;
+disp(['Rank: ' num2str(rank([C;C*Ad;C*Ad*Ad]))]);
+
+%% Add Offset to system noise
+%Static System noise:
+%HGT = 0;
+%SPE = 0;
+ACEL = 70;
+ACELOFS = 0.0001;
+PRE = 0.1;
+%TMP = 0;
+%DTMP = 0.1;
+Q = diag([ACEL;ACELOFS;PRE]);%;TMP;DTMP]);
+
+%Dynamic Sytem noise:
+%HGT = ones(1,length(TimeVec))*0;
+%SPE = ones(1,length(TimeVec))*0;
+ACEL = [100 100 100 50 30 ones(1,length(TimeVec)-5)*.01];
+ACELOFS = ones(1,length(TimeVec))*ACELOFS;
+PRE = [zeros(1,10) ones(1,length(TimeVec)-20)*0.7 zeros(1,10)];         %Due to linearization it gets less accurate in the middle
+%TMP = ones(1,length(TimeVec))*0;
+%DTMP = ones(1,length(TimeVec))*0.1;
+%Q_dyn = [HGT;SPE;ACEL;PRE;TMP;DTMP]; 
+Q_dyn = [ACEL;ACELOFS;PRE];%;DTMP];
+
+%Add all noise vectors into an noise matrix
+Q_dyn_m = diag(Q_dyn(:,1)');
+for n = 2:length(TimeVec)
+    Q_dyn_m = cat(3,Q_dyn_m,diag(Q_dyn(:,n)'));
+end
+
+HEIGHTBARvar = ones(1,length(TimeVec))*0.1211;
+%Add all noise vectors into an noise matrix
+R_dyn = [GPSvar;ACLvar;BM1var;BM2var;HEIGHTBARvar];
+R_dyn_m = diag(R_dyn(:,1)');
+for n = 2:length(TimeVec)
+    R_dyn_m = cat(3,R_dyn_m,diag(R_dyn(:,n)'));
+end
+R_dyn_t = timeseries(R_dyn,TimeVec);
+
+%% Do estimation Loop
+
+u = zeros(1,length(TimeVec));                       %Input vector is zero
+y = [h_mes_GPS;a_mes;p_mes_1;p_mes_2];%T_mes];      %Output are the measurements
+x = [0;0;0;0;Po];%T(1);0];                          %Start Vector should be like this
+P = eye(5);                                         %Standart can maybe be increased
+x_est_loop6 = zeros(size(x,1),length(TimeVec));     %Vector for the SE values
+disp('Loop 6 start..');
+for k = 1:length(TimeVec)
+    K = P*C'*pinv(C*P*C' + R_dyn_m(:,:,k));
+    Height1 = CalcHeight(Po,x(5),T0,0,true);
+    y = [h_mes_GPS(k);a_mes(k);p_mes_1(k);p_mes_2(k);Height1];
+    x = x + K*(y - C*x);
+    P = (eye(5)-K*C)*P;
+    
+    x_est_loop6(:,k) = x;                            %Save data from the Sensor fusion
+    
+    x = Ad*x + Bd*u(k);
+    P = Ad*P*Ad' + Gd* Q_dyn_m(:,:,k)*Gd'; %Gd*Q*Gd';
+
+end
+disp('...finished!');
+
+%% Plot Loop 6
+
+figure('Name','Real flight 2 vs estimation Self calculated');
+plot(TimeVec,h);
+grid on;
+hold on;
+plot(TimeVec,x_est_loop6(1,:)); 
+plot(TimeVec,x_est_loop(1,:));
+plot(TimeVec,v);
+plot(TimeVec,x_est_loop6(2,:));
+plot(TimeVec,a);
+plot(TimeVec,x_est_loop6(3,:));
+plot(TimeVec,x_est_loop6(4,:));
+plot(TimeVec,p);
+plot(TimeVec,x_est_loop6(5,:));
+hold off;
+legend('real Height','estiamted Height','estimated Height Simulink','real Speed','estimated Speed','real acceloration','estimated acceloration','acceleration offset','real pressure','estimated pressure');
+ylabel('height & speed & accelaration & pressure');
+xlabel('Time [s]');
+
+%% Differences between estimation and ground truth
+
+figure('Name','Histogramm of the height Errors System 1-4');
 diff = abs(h-x_est_loop(1,:));
+subplot(4,1,1);
+histogram(diff);
+title('System 1: x=[h;v;a;p;T;Tdot]');
 display(['Loop 1 "Normal" Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 diff = abs(h-x_est_loop2(1,:));
+subplot(4,1,2);
+histogram(diff);
+title('System 2: x=[h,v,a,aoffset,p,T,Tdot]');
 display(['Loop 2 Acceloration with offset Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 diff = abs(h-x_est_loop3(1,:));
+subplot(4,1,3);
+histogram(diff);
+title('System 3: x=[h,v,a,aoffset,T]');
 display(['Loop 3 Pressure as height Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
+diff = abs(h-x_est_loop4(1,:));
+subplot(4,1,4);
+histogram(diff);
+title('System 4: x=[h,v,a,aoffset]');
+display(['Loop 4 Pressure as height Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 
+figure('Name','Histogramm of the height Errors System 5,6');
+diff = abs(h-x_est_loop5(1,:));
+subplot(2,1,1);
+histogram(diff);
+title('System 5: x=[h;v;a;aoffset] without GPS Measurements !');
+display(['Loop 5 Without GPS Max difference:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
+diff = abs(h-x_est_loop6(1,:));
+subplot(2,1,2);
+histogram(diff);
+title('System 6: x=[h,v,a,aoffset,p,T,Tdot] with height depending on Pressure!');
+display(['Loop 6 With height depending half on pressure:' num2str(max(diff)) ' min difference:' num2str(min(diff)) ' mean:' num2str(mean(diff)) ' median: ' num2str(median(diff))]);
 
+figure('Name','Plot of the absolute height Errors System 1-6');
+hold on;
+diff = abs(h-x_est_loop(1,:));
+plot(TimeVec,diff);
+diff = abs(h-x_est_loop2(1,:));
+plot(TimeVec,diff);
+diff = abs(h-x_est_loop3(1,:));
+plot(TimeVec,diff);
+diff = abs(h-x_est_loop4(1,:));
+plot(TimeVec,diff);
+diff = abs(h-x_est_loop5(1,:));
+plot(TimeVec,diff);
+diff = abs(h-x_est_loop6(1,:));
+plot(TimeVec,diff);
+legend('System1','System2','System3','System4','System5','System6');
+hold off;
 % %%
 % figure('Name','Generated sensor data');
 % hold on;
