@@ -7,15 +7,15 @@ close all, clear all, clc;
 %% Get the different AR model Parameters with the walker yule equation of order n
 
 
-n = 500;                %Order of the AR models
+n = 100;                %Order of the AR models
 dTMeasured = 0.013;     %Sample Timesteps from the test flights
 dTSimulation = 0.001;   %Sample Timesteps for the Simulation
 % generated the different noise vectors:
 % noisePreIco = p_noise_preIco;
 % noiseBrn = _brn;
 % noiseUpflight = p_noise_upflighht;
-sensor = 'a'        % which sensor should be calculated, a,p,T,phi,GPS
-saveData = false;   % If the AR-Models should be saved
+sensor = 'GPS'        % which sensor should be calculated, a,p,T,phi,GPS
+saveData = true;   % If the AR-Models should be saved
 
  if sensor == 'a'
     load('Ericnoise.mat');
@@ -149,7 +149,7 @@ saveData = false;   % If the AR-Models should be saved
 %  TVBrn = a_T_brn-a_T_brn(1);
 %  noiseUpflight = a_noise_upflight;
 %  TVUpflight = a_T_upflight-a_T_upflight(1);
- %% Adjust the Noise vector to the right time
+ %% Adjust the Noise vector to the right time sampling
 fs = 1/dTSimulation;
 
 noisePreIco = resample(noisePreIco,TVPreIco,fs);

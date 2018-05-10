@@ -12,14 +12,14 @@ log_airspeed = [];  % [airspeed]
 
 fname = 'none';
 % Open log file uncomment for different Flights.
-%load('Tir_test3d2_Paths.mat');
+load('Tir_test3d2_Paths.mat');
 %fname = 'Tir2noise.mat';
 %load('Tir_test3d1_Paths.mat');
 %fname = 'Tir1noise.mat';
 %load('18_11_18_Eric_Paths.mat');
 %fname = 'Ericnoise.mat';
-load('18_11_18_Greg_Paths.mat');
-fname = 'Gregnoise.mat';
+%load('18_11_18_Greg_Paths.mat');
+%fname = 'Gregnoise.mat';
 
 if hasGPS
     log_GPS_time = [];
@@ -101,6 +101,9 @@ startTime = log_time(1);
 log_time(:) = log_time(:)-startTime;
 log_time(:) = log_time(:)/1000000;
 
+% Adjust resolution due to gyrometer settings (2000 °/s resolution = 16.4°/s for LSB)
+
+log_imu_g = log_imu_g/16.4;
 
 %%
 plot(log_time,log_h);
@@ -115,21 +118,22 @@ anglex = zeros(length(log_time),1);
 angley = zeros(length(log_time),1);
 anglez = zeros(length(log_time),1);
 
-
+% Integrate with the trapez rule:
 for k = 2:length(log_time)
     dT = log_time(k) - log_time(k-1);
     anglex(k) = anglex(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,1)-log_imu_g(k-1,1))/2)*dT;
-    angley(k) = angley(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,2)-log_imu_g(k-1,2))/2)*dT;
-    anglez(k) = anglez(k-1) + log_imu_g(k-1,1) *dT +((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
+    angley(k) = angley(k-1) + log_imu_g(k-1,2) *dT +((log_imu_g(k,2)-log_imu_g(k-1,2))/2)*dT;
+    anglez(k) = anglez(k-1) + log_imu_g(k-1,3) *dT +((log_imu_g(k,3)-log_imu_g(k-1,3))/2)*dT;
 end
 
-anglex = anglex/100;
-angley = angley/100;
+% anglex = anglex;
+% angley = angley;
+% anglez = anglez;
 axx = log_imu_a(:,1) .* cos(anglex*pi/180)*9.81;
 axy = log_imu_a(:,1) .* cos(angley*pi/180)*9.81;
 axz = log_imu_a(:,1) .* cos(anglez*pi/180)*9.81;
-ayx = log_imu_a(:,2) .* -cos(anglex*pi/180)*9.81;
-ayy = log_imu_a(:,2) .* -cos(angley*pi/180)*9.81;
+ayx = log_imu_a(:,2) .* cos(anglex*pi/180)*9.81;
+ayy = log_imu_a(:,2) .* cos(angley*pi/180)*9.81;
 ayz = log_imu_a(:,2) .* cos(anglez*pi/180)*9.81;
 azx = log_imu_a(:,3) .* cos(anglex*pi/180)*9.81;
 azy = log_imu_a(:,3) .* cos(angley*pi/180)*9.81;
@@ -141,9 +145,9 @@ hold on;
 plot(log_time,log_imu_g(:,1))
 plot(log_time,anglex);
 plot(log_time,axx);
-plot(log_time,axy);
-plot(log_time,axz);
-legend('ax','angle speed','angle','acceloration with angle x','acceloration with angle y','acceloration with angle z');
+%plot(log_time,axy);
+%plot(log_time,axz);
+legend('ax','angle speed','angle','acceloration with angle x');
 hold off;
 
 figure('Name','Y');
@@ -154,24 +158,26 @@ plot(log_time,angley);
 plot(log_time,ayx);
 plot(log_time,ayy);
 plot(log_time,ayz);
-legend('ay','angle speed','angle','acceloration with angle x','acceloration with angle y','acceloration with angle z');hold off;
+legend('ay','angle speed','angle','acceloration with angle y');
+hold off;
 
 figure('Name','Z');
 plot(log_time,log_imu_a(:,3));
 hold on;
 plot(log_time,log_imu_g(:,3))
 plot(log_time,anglez);
+%plot(log_time,azx);
+%plot(log_time,azy);
 plot(log_time,azz);
-plot(log_time,azx);
-plot(log_time,azy);
-plot(log_time,azz);
-legend('az','angle speed','angle','acceloration with angle x','acceloration with angle y','acceloration with angle z');
+legend('az','angle speed','angle','acceloration with angle z');
 hold off;
 
 
 %% Find Icongnition Time und Burnduration:
 %declare which acceloration vecort should be used
-acc_mes = ayy;
+phidot = log_imu_g(:,1);
+phi = anglex;
+acc_mes = axx;
 
 T_ico_ind = 1; %Icogntiono Time index
 while acc_mes(T_ico_ind) < 20
@@ -190,7 +196,7 @@ T_brn = log_time(T_brn_ind); %Burnout time
 
 T_par_ind = T_brn_ind; % Parachute time index
 
-while abs(acc_mes(T_par_ind)) < 15
+while acc_mes(T_par_ind) <15
    T_par_ind = T_par_ind + 1; 
 end
 
@@ -207,14 +213,16 @@ decayTime = 10;
 riseTime = 1;
 a_T_preIco = log_time(riseTime:T_ico_ind-decayTime);
 a_mean = mean(acc_mes(riseTime:T_ico_ind-decayTime));
-a_var_preIco  = var(acc_mes(riseTime:T_ico_ind-decayTime));
+p_preIco = polyfit(a_T_preIco,acc_mes(riseTime:T_ico_ind-decayTime),2);
+p_preIco_curve = polyval(p_preIco,a_T_preIco);
+a_var_preIco  = var(acc_mes(riseTime:T_ico_ind-decayTime)-p_preIco_curve);
 
 subplot(4,1,1);
-plot(log_time(riseTime:T_ico_ind-decayTime),acc_mes(riseTime:T_ico_ind-decayTime),log_time(riseTime:T_ico_ind-decayTime),ones(1,length(log_time(riseTime:T_ico_ind-decayTime)))*a_mean);
+plot(log_time(riseTime:T_ico_ind-decayTime),acc_mes(riseTime:T_ico_ind-decayTime),log_time(riseTime:T_ico_ind-decayTime),p_preIco_curve);%ones(1,length(log_time(riseTime:T_ico_ind-decayTime)))*a_mean);
 
 % Bandwith
-a_noise_preIco = acc_mes(riseTime:T_ico_ind-decayTime)-a_mean;
-acorr_preIco = xcorr(acc_mes(riseTime:T_ico_ind-decayTime)-a_mean);
+a_noise_preIco = acc_mes(riseTime:T_ico_ind-decayTime)-p_preIco_curve;
+acorr_preIco = xcorr(acc_mes(riseTime:T_ico_ind-decayTime)-p_preIco_curve);
 N = length(acorr_preIco);
 
 subplot(4,1,2);
@@ -546,7 +554,7 @@ end
 dT = median(Taus)
 % save data into m file.
 if ~strcmp(fname,'none')
-    save(fname, 'a_noise_preIco','a_noise_brn','a_noise_upflight','a_var_brn','a_var_preIco','a_var_upflight','acorr_brn','acorr_preIco','acorr_upflight','p_noise_preIco','p_noise_brn','p_noise_upflight','p_var_brn','p_var_preIco','p_var_upflight','pcorr_brn','pcorr_preIco','pcorr_upflight','T_noise_preIco','T_noise_brn','T_noise_upflight','T_var_brn','T_var_preIco','T_var_upflight','Tcorr_brn','Tcorr_preIco','Tcorr_upflight','dT','a_T_preIco','a_T_brn','a_T_upflight','p_T_preIco','p_T_brn','p_T_upflight','T_T_preIco','T_T_brn','T_T_upflight');
+    save(fname, 'a_noise_preIco','a_noise_brn','a_noise_upflight','a_var_brn','a_var_preIco','a_var_upflight','p_noise_preIco','p_noise_brn','p_noise_upflight','p_var_brn','p_var_preIco','p_var_upflight','pcorr_brn','pcorr_preIco','pcorr_upflight','T_noise_preIco','T_noise_brn','T_noise_upflight','T_var_brn','T_var_preIco','T_var_upflight','Tcorr_brn','Tcorr_preIco','Tcorr_upflight','dT','a_T_preIco','a_T_brn','a_T_upflight','p_T_preIco','p_T_brn','p_T_upflight','T_T_preIco','T_T_brn','T_T_upflight','phi','phidot','log_time');
     disp(['data saved into: ' fname]);
 end
 %% Path generation
