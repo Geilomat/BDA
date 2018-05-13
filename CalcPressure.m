@@ -1,6 +1,14 @@
-function [Pres] = CalcPressure(P0,H0,H,T0)
+function [Pres] = CalcPressure(P0,H0,H,T0,inKelvin,TempGrad)
 %CALCPRESSURE Summary of this function goes here
 %   Detailed explanation goes here
-Pres = P0 * ((1-0.0065*(H-H0))/(T0+273.15))^5.255;
+M = 0.02896;
+g = 9.807;
+R = 8.314;
+
+if inKelvin
+    Pres = P0 * ((1-TempGrad*(H-H0))/(T0))^5.255;
+else
+    Pres = P0 * ((1-TempGrad*(H-H0))/(T0+273.15))^5.255;
+end
 end
 

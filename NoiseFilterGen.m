@@ -14,8 +14,8 @@ dTSimulation = 0.001;   %Sample Timesteps for the Simulation
 % noisePreIco = p_noise_preIco;
 % noiseBrn = _brn;
 % noiseUpflight = p_noise_upflighht;
-sensor = 'GPS'        % which sensor should be calculated, a,p,T,phi,GPS
-saveData = true;   % If the AR-Models should be saved
+sensor = 'a'        % which sensor should be calculated, a,p,T,phi,GPS
+saveData = false;   % If the AR-Models should be saved
 
  if sensor == 'a'
     load('Ericnoise.mat');

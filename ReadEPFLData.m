@@ -176,7 +176,9 @@ hold off;
 %% Find Icongnition Time und Burnduration:
 %declare which acceloration vecort should be used
 phidot = log_imu_g(:,1);
-phi = anglex;
+for k = 1:length(angley)
+    phi(k) = max([angley(k) anglez(k)]);
+end
 acc_mes = axx;
 
 T_ico_ind = 1; %Icogntiono Time index
