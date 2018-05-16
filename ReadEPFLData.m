@@ -179,7 +179,7 @@ phidot = log_imu_g(:,1);
 for k = 1:length(angley)
     phi(k) = max([angley(k) anglez(k)]);
 end
-acc_mes = axx;
+acc_mes = log_imu_a(:,1).*cos(phi(:)*pi/180)*9.81;
 
 T_ico_ind = 1; %Icogntiono Time index
 while acc_mes(T_ico_ind) < 20
@@ -198,14 +198,26 @@ T_brn = log_time(T_brn_ind); %Burnout time
 
 T_par_ind = T_brn_ind; % Parachute time index
 
-while acc_mes(T_par_ind) <15
+while abs(acc_mes(T_par_ind)) <15
    T_par_ind = T_par_ind + 1; 
 end
 
 T_par = log_time(T_par_ind); % Parachute time
 
+figure('Name','Acceloration ');
+hold on;
+grid on;
 
+%plot(log_time(T_ico_ind-30:T_par_ind),log_h(T_ico_ind-30:T_par_ind));
+plot(log_time(T_ico_ind-30:T_par_ind),acc_mes(T_ico_ind-30:T_par_ind));
+%set(gca, 'XTick', sort([T_ico T_brn T_par, get(gca, 'XTick')]));
+xticks([T_ico T_brn T_par]);
+xticklabels({'Icognition','Burnout','Parachute ejection'});
+ylabel('Acceleration [m/s^2]');
+xlabel('Timestamps');
+%legend('Acceleration')
 
+hold off;
 %% Calculate Mean, Variance and Bandwith before Icognition, during Burntime and during ubpflight until parachute activation from Accelerometer:
 fs = 1/(log_time(end)/length(log_time));
 figure('Name','Polyfit,Autocorrelation and power density spectrum before icognition Accel');
@@ -268,7 +280,7 @@ subplot(4,1,3);
 if length(acorr_brn) < 2048
     N = 2048;
 end
-stem([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_brn),N))));
+plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_brn),N))));
 ylabel('Energy in [dB]'), xlabel('Frequency in [Hz]');
 title('power density spectrum');
 
@@ -285,26 +297,27 @@ p_upflight = polyfit(a_T_upflight,acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime
 p_upflight_curve =polyval(p_upflight,log_time(T_brn_ind+riseTime:T_par_ind-decayTime));
 a_var_upflight = var(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 
-subplot(4,1,1);
+subplot(3,1,1);
 plot(log_time(T_brn_ind+riseTime:T_par_ind-decayTime),acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime),log_time(T_brn_ind+riseTime:T_par_ind-decayTime),p_upflight_curve);
+title('Polynom fitting');
 
 % Bandwith
 a_noise_upflight = acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve;
 acorr_upflight = xcorr(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 N = length(acorr_upflight);
-subplot(4,1,2);
-stem([-N/2:N/2-1],acorr_upflight);
+subplot(3,1,2);
+plot([-N/2:N/2-1],acorr_upflight);
 title('Autocorrelation');
 
-subplot(4,1,3);
-if length(acorr_upflight) < 2048
-    N = 2048;
-end
-plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_upflight),N))));
-ylabel('Energy in [dB]'), xlabel('Frequency in [Hz]');
-title('power density spectrum');
+% subplot(4,1,3);
+% if length(acorr_upflight) < 2048
+%     N = 2048;
+% end
+% plot([-fs:(2*fs)/N:fs-2*fs/N],10*log10(fftshift(fft(abs(acorr_upflight),N))));
+% ylabel('Energy in [dB]'), xlabel('Frequency in [Hz]');
+% title('power density spectrum');
 
-subplot(4,1,4);
+subplot(3,1,3);
 histogram(acc_mes(T_brn_ind+riseTime:T_par_ind-decayTime)-p_upflight_curve);
 title('Histogram');
 

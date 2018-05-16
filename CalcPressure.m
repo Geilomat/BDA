@@ -6,9 +6,9 @@ g = 9.807;
 R = 8.314;
 
 if inKelvin
-    Pres = P0 * ((1-TempGrad*(H-H0))/(T0))^5.255;
+    Pres = P0 * ((1-TempGrad*(H-H0))/(T0))^((M*g)/(R*TempGrad));
 else
-    Pres = P0 * ((1-TempGrad*(H-H0))/(T0+273.15))^5.255;
+    Pres = P0 * ((1-TempGrad*(H-H0))/(T0+273.15))^((M*g)/(R*TempGrad));
 end
 end
 

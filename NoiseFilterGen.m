@@ -14,7 +14,7 @@ dTSimulation = 0.001;   %Sample Timesteps for the Simulation
 % noisePreIco = p_noise_preIco;
 % noiseBrn = _brn;
 % noiseUpflight = p_noise_upflighht;
-sensor = 'a'        % which sensor should be calculated, a,p,T,phi,GPS
+sensor = 'p'        % which sensor should be calculated, a,p,T,phi,GPS
 saveData = false;   % If the AR-Models should be saved
 
  if sensor == 'a'
@@ -189,12 +189,16 @@ plot(test_corr);
 legend('acorr real','acorr test');
 
 figure('Name','Power density during upflight');
-plot(10*log10(pwelch(mes_noise)));
-%pwelch(noise,test_noise);
+pds_mes = 10*log10(pwelch(mes_noise));
+pds_test = 10*log10(pwelch(test_noise));
+plot([0+1/length(pds_mes):1/length(pds_mes):1],pds_mes);
+%pwelch(mes_noise);
 hold on;
 %pwelch(test_noise);
-plot(10*log10(pwelch(test_noise)));
-legend('PDS measured','PDS test')
+plot([0+1/length(pds_test):1/length(pds_test):1],pds_test);
+legend('PDS measured','PDS generated')
+ylabel('Power/frequency [dB/rad/sample]')
+xlabel('Normalized Frequency [*pi rad/sample]')
 
 
 %% Compare while burning
